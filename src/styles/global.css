@@ -1,0 +1,159 @@
+/* ============================================
+   Varadero Taxi Tour — Design tokens
+   Paleta extraída del logo: azul-verdoso profundo,
+   turquesa de costa, dorado de concha y arena.
+   ============================================ */
+:root {
+  --teal-deep:    #0C6672;
+  --teal:         #12808E;
+  --turquoise:    #4FC2CC;
+  --turquoise-lt: #A7E3E6;
+  --gold:         #F0A93B;
+  --gold-dark:    #D4881E;
+  --sand:         #EAD5A4;
+  --sand-lt:      #F6ECD6;
+  --cream:        #FBF7EE;
+  --ink:          #0B3238;
+  --ink-soft:     #34575D;
+  --white:        #FFFFFF;
+
+  --font-display: "Fredoka", "Baloo 2", system-ui, sans-serif;
+  --font-body:    "Work Sans", "Inter", system-ui, sans-serif;
+
+  --radius-lg: 28px;
+  --radius-md: 16px;
+  --radius-sm: 10px;
+
+  --shadow-card: 0 10px 30px -12px rgba(11, 50, 56, 0.28);
+  --shadow-soft: 0 4px 16px -6px rgba(11, 50, 56, 0.18);
+
+  --container: 1160px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--cream);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 17px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+img { max-width: 100%; display: block; }
+
+a { color: inherit; }
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  margin: 0;
+  line-height: 1.05;
+  color: var(--teal-deep);
+}
+
+p { margin: 0; }
+
+ul { margin: 0; padding: 0; list-style: none; }
+
+.container {
+  width: 100%;
+  max-width: var(--container);
+  margin-inline: auto;
+  padding-inline: 24px;
+}
+
+.eyebrow {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.78rem;
+  color: var(--gold-dark);
+  font-weight: 600;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1rem;
+  padding: 14px 26px;
+  border-radius: 999px;
+  text-decoration: none;
+  border: 2px solid transparent;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+  cursor: pointer;
+}
+.btn:hover { transform: translateY(-2px); }
+.btn:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 3px;
+}
+
+.btn-primary {
+  background: var(--gold);
+  color: var(--ink);
+  box-shadow: var(--shadow-soft);
+}
+.btn-primary:hover { background: var(--gold-dark); color: var(--white); }
+
+.btn-ghost {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.65);
+  color: var(--white);
+}
+.btn-ghost:hover { background: rgba(255, 255, 255, 0.15); }
+
+.btn-outline {
+  background: transparent;
+  border-color: var(--teal);
+  color: var(--teal-deep);
+}
+.btn-outline:hover { background: var(--teal); color: var(--white); }
+
+.section {
+  padding-block: clamp(56px, 8vw, 108px);
+}
+
+.section-head {
+  max-width: 640px;
+  margin-bottom: clamp(32px, 5vw, 56px);
+}
+
+.section-head h2 {
+  font-size: clamp(1.9rem, 3.6vw, 2.7rem);
+  margin-top: 8px;
+}
+
+.section-head p {
+  margin-top: 14px;
+  color: var(--ink-soft);
+  font-size: 1.05rem;
+}
+
+.reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}

@@ -1,0 +1,27 @@
+{
+  "name": "varadero-taxi-tour",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "seed": "sanity documents create scripts/seed-siteSettings.json --dataset production --replace"
+  },
+  "dependencies": {
+    "@astrojs/react": "^4.4.2",
+    "@sanity/astro": "^3.5.0",
+    "@sanity/client": "^8.1.0",
+    "astro": "^5.18.2",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "sanity": "^6.10.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "vite": "^6.4.3"
+  }
+}
