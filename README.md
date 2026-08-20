@@ -18,7 +18,7 @@ Abre `http://localhost:4321`.
 El panel vive embebido en tu propio sitio:
 
 - **Local:** `http://localhost:4321/admin`
-- **Producción:** `https://varaderotaxitour.com/admin` (cuando esté desplegado)
+- **Producción:** `https://varadero-taxi-tour.vercel.app/admin`
 
 Ahí editas todo el contenido: contacto (WhatsApp/Instagram/teléfono), hero,
 sección nosotros, rutas y precios, CTA y footer.
