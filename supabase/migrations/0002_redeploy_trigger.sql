@@ -1,6 +1,6 @@
 -- Auto-publicación: cuando cambia public.settings, llama a la Edge Function
 -- 'redeploy' (Supabase), que dispara el workflow de GitHub Pages vía
--- repository_dispatch.
+-- workflow_dispatch (Actions API).
 --
 -- IMPORTANTE: el repo es público. Sustituye <FUNCTION_URL> y <SHARED_SECRET>
 -- por los valores reales (aplicados fuera de git) y revoca execute.

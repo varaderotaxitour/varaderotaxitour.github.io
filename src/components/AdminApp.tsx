@@ -156,7 +156,7 @@ export default function AdminApp() {
     const deadline = Date.now() + 4 * 60 * 1000;
     const url =
       'https://api.github.com/repos/varaderotaxitour/varaderotaxitour.github.io/actions/runs' +
-      '?event=repository_dispatch&per_page=1';
+      '?event=workflow_dispatch&per_page=1';
     const tick = async () => {
       try {
         const res = await fetch(url);
