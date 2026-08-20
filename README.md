@@ -1,84 +1,83 @@
-# Varadero Taxi Tour — Frontend (Astro + Sanity CMS)
+# Varadero Taxi Tour — Frontend (Astro + Supabase)
 
 Landing page de una sola página para el servicio de taxi privado y excursiones
-en Varadero, Cuba. Todo el contenido se edita desde Sanity CMS.
+en Varadero, Cuba. Todo el contenido se edita desde el panel de administración
+propio (Supabase: base de datos + auth + storage).
 
 ## Cómo correrlo
 
 ```bash
 pnpm install
-cp .env.example .env   # rellena PUBLIC_SANITY_PROJECT_ID (nveap59g) y PUBLIC_SANITY_DATASET
+cp .env.example .env   # rellena PUBLIC_SUPABASE_URL y PUBLIC_SUPABASE_ANON_KEY
 pnpm dev
 ```
 
 Abre `http://localhost:4321`.
 
-## Panel de administración (Sanity Studio)
+## Panel de administración
 
-El panel vive embebido en tu propio sitio:
+El panel vive en tu propio sitio:
 
 - **Local:** `http://localhost:4321/admin`
-- **Producción:** `https://varadero-taxi-tour.vercel.app/admin`
+- **Producción:** `https://varaderotaxitour.github.io/admin`
 
 Ahí editas todo el contenido: contacto (WhatsApp/Instagram/teléfono), hero,
-sección nosotros, rutas y precios, CTA y footer.
+sección nosotros, rutas y precios, CTA y footer. También moderas los
+comentarios de los visitantes (aprobar/ocultar/eliminar) y subes las fotos del
+hero y de la sección "Nosotros".
+
+### Acceso
+
+El panel pide login (email + contraseña). El usuario se crea en el dashboard
+de Supabase → Authentication → Users → Add user. Importante: solo crea tu
+usuario de administración; cualquiera con una cuenta podría editar contenido.
 
 ### Importante
 
-- **Publicar:** al editar en el Studio, los cambios se guardan como
-  **borrador**. Para que aparezcan en la web hay que pulsar el botón
-  **"Publish"** del documento.
-- **En dev** (`pnpm dev`): además del contenido publicado, se muestran los
-  **borradores** (si `SANITY_API_READ_TOKEN` está definido), por lo que verás
-  los cambios sin necesidad de publicar. En el **build de producción** solo se
-  usa el contenido publicado.
-- El sitio es **estático**: al publicar contenido, hay que **re-desplegar**
-  (`pnpm build`) para que los cambios aparezcan en producción. El contenido
-  se descarga de Sanity durante el build. Si Sanity no responde, la página usa
-  el contenido de respaldo definido en `src/pages/index.astro` (fallback).
+- El sitio es **estático**: el contenido se descarga de Supabase durante el
+  build (`pnpm build`). Al guardar cambios en el panel hay que **re-desplegar**
+  (push a `main` o ejecutar el workflow "Deploy to GitHub Pages") para que
+  aparezcan en producción. Si Supabase no responde, la página usa el contenido
+  de respaldo definido en `src/pages/index.astro` (fallback).
+- Los **comentarios** de los visitantes se guardan en tiempo real: quien
+  escribe solo ve su comentario tras ser **aprobado** en el panel.
 
-## Configuración de producción (pendiente)
+## Base de datos (Supabase)
 
-1. **Desplegar el sitio** en Vercel o Netlify con las variables
-   `PUBLIC_SANITY_PROJECT_ID=nveap59g` y `PUBLIC_SANITY_DATASET=production`.
-2. **CORS:** en manage.sanity.io → API → CORS origins, añadir el dominio de
-   producción (con credenciales) para que el Studio embebido funcione.
-   `http://localhost:4321` ya está añadido.
-3. **Webhook de rebuild:** en manage.sanity.io → API → Webhooks (o con el CLI:
-   `pnpm sanity hooks create`), crear un webhook apuntando al deploy hook de tu
-   hosting (Vercel/Netlify), para que cada publicación en Sanity re-despliegue
-   el sitio automáticamente.
-4. **Rewrite de `/admin`:** el Studio es una SPA con rutas internas
-   (ej. `/admin/structure`). En hostings estáticos, refrescar una sub-ruta
-   puede dar 404; configura un rewrite que dirija `/admin/*` a `/admin`
-   (Vercel: `rewrites` en `vercel.json`; Netlify: `_redirects`).
+- `settings`: una fila con todo el contenido del sitio (textos, rutas y
+  precios en JSONB, URLs de fotos).
+- `comments`: comentarios de visitantes (`approved` controla la visibilidad).
+- Bucket público `fotos`: imágenes del hero y de "Nosotros".
 
-## Schema de contenido
+Las políticas RLS permiten: lectura pública de `settings`, lectura pública solo
+de comentarios aprobados, inserción anónima de comentarios (sin auto-aprobarse)
+y escritura/moderación solo para usuarios autenticados (el admin).
 
-El schema vive en `sanity.config.ts` (documento singleton `siteSettings`).
-Para migrar contenido inicial al CMS:
-
-```bash
-pnpm seed
-```
-
-Esto crea/actualiza el documento `siteSettings` con el contenido de
-`scripts/seed-siteSettings.json`.
+El esquema vive en `supabase/migrations/0001_init.sql`.
 
 ## Estructura
 
 ```
-sanity.config.ts          # Configuración y schema del Studio
-sanity.cli.ts             # Config CLI de Sanity
-scripts/seed-siteSettings.json  # Contenido inicial para el seed
+astro.config.mjs          # Config de Astro
+supabase/migrations/      # Esquema de la base de datos
 src/
   layouts/Layout.astro    # <head>, fuentes (Fredoka + Work Sans), meta tags
+  pages/index.astro       # Página principal (consume Supabase con fallback)
+  pages/admin.astro       # Panel de administración
+  components/Comments.tsx # Comentarios de visitantes (React)
+  components/AdminApp.tsx # Panel: contenido, comentarios, fotos (React)
   components/Icon.astro   # Iconos SVG reutilizables
-  pages/index.astro       # Página (consume Sanity con fallback local)
   styles/global.css       # Paleta, tipografía y estilos base
 public/
-  logo.png                # Logo
+  logo.png / logo.webp    # Logo
 ```
+
+## Despliegue
+
+GitHub Pages + GitHub Actions (`.github/workflows/deploy.yml`). Las variables
+`PUBLIC_SUPABASE_URL` y `PUBLIC_SUPABASE_ANON_KEY` están configuradas en las
+variables del repo. El workflow además copia `dist/admin/index.html` a
+`dist/404.html` para que las sub-rutas del admin no den 404.
 
 ## Paleta e identidad
 

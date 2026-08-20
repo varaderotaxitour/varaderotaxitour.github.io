@@ -1,0 +1,133 @@
+.comments-wrap {
+  max-width: 720px;
+  margin-inline: auto;
+}
+
+.comments-empty {
+  text-align: center;
+  color: var(--ink-soft);
+  padding: 24px;
+  background: var(--white);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-soft);
+}
+
+.comments-list {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 36px;
+}
+
+.comment-card {
+  background: var(--white);
+  border-radius: var(--radius-md);
+  padding: 20px 22px;
+  box-shadow: var(--shadow-soft);
+}
+
+.comment-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.comment-name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--teal-deep);
+}
+
+.comment-date {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  opacity: 0.8;
+}
+
+.comment-message {
+  color: var(--ink-soft);
+  font-size: 0.98rem;
+}
+
+.comment-form {
+  display: grid;
+  gap: 14px;
+  background: var(--white);
+  border-radius: var(--radius-md);
+  padding: 26px;
+  box-shadow: var(--shadow-soft);
+}
+
+.comment-form h3 {
+  font-family: var(--font-display);
+  color: var(--teal-deep);
+  font-size: 1.15rem;
+}
+
+.comment-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.comment-form input,
+.comment-form textarea {
+  font: inherit;
+  font-weight: 400;
+  padding: 10px 12px;
+  border: 1px solid rgba(12, 102, 114, 0.25);
+  border-radius: var(--radius-sm);
+  background: var(--cream);
+  color: var(--ink);
+  resize: vertical;
+}
+
+.comment-form input:focus,
+.comment-form textarea:focus {
+  outline: 2px solid var(--turquoise);
+  outline-offset: 1px;
+}
+
+.comment-error {
+  color: #b3261e;
+  font-size: 0.9rem;
+}
+
+.comments-sent {
+  text-align: center;
+  color: var(--teal-deep);
+  background: var(--turquoise-lt);
+  border-radius: var(--radius-md);
+  padding: 22px;
+  font-weight: 600;
+}
+
+.btn-primary {
+  justify-self: start;
+  background: var(--gold);
+  color: var(--ink);
+  border: none;
+  padding: 12px 22px;
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+
+.btn-primary:hover {
+  background: var(--gold-dark);
+  color: var(--white);
+  transform: translateY(-2px);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}

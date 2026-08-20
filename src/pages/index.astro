@@ -1,8 +1,8 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import Icon from '../components/Icon.astro';
-import { sanityClient } from 'sanity:client';
-import { createClient } from '@sanity/client';
+import Comments from '../components/Comments';
+import { createClient } from '@supabase/supabase-js';
 
 const fallback = {
   seoTitle: 'Varadero Taxi Tour — Taxi privado, traslados y excursiones en Varadero',
@@ -94,30 +94,58 @@ const fallback = {
   footerCopyright: 'Varadero Taxi Tour. Hecho con cariño en la península.',
 };
 
-async function loadContent() {
-  const isDev = import.meta.env.DEV;
-  const readToken = import.meta.env.SANITY_API_READ_TOKEN;
-  if (isDev && readToken) {
-    const draftClient = createClient({
-      projectId: import.meta.env.PUBLIC_SANITY_PROJECT_ID,
-      dataset: import.meta.env.PUBLIC_SANITY_DATASET,
-      apiVersion: '2026-03-01',
-      useCdn: false,
-      token: readToken,
-      perspective: 'drafts',
-    });
-    return draftClient.fetch('*[_type == "siteSettings"][0]');
-  }
-  return sanityClient.fetch('*[_type == "siteSettings"][0]');
+const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL as string | undefined;
+const supabaseKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string | undefined;
+const supabaseStorage = supabaseUrl
+  ? `${supabaseUrl}/storage/v1/object/public/fotos`
+  : '';
+
+function rowToContent(row: any) {
+  return {
+    seoTitle: row.seo_title,
+    seoDescription: row.seo_description,
+    whatsappNumber: row.whatsapp_number,
+    whatsappMessage: row.whatsapp_message,
+    phoneDisplay: row.phone_display,
+    instagramUrl: row.instagram_url,
+    heroEyebrow: row.hero_eyebrow,
+    heroTitle: row.hero_title,
+    heroLead: row.hero_lead,
+    heroNote: row.hero_note,
+    heroImageUrl: row.hero_image_url,
+    aboutQuote: row.about_quote,
+    aboutText: row.about_text,
+    aboutImageUrl: row.about_image_url,
+    trustItems: row.trust_items,
+    routes: row.routes,
+    ctaEyebrow: row.cta_eyebrow,
+    ctaTitle: row.cta_title,
+    ctaLead: row.cta_lead,
+    footerTagline: row.footer_tagline,
+    footerCopyright: row.footer_copyright,
+  };
 }
 
 let content = fallback;
 try {
-  const data = await loadContent();
-  if (data) content = { ...fallback, ...data };
+  if (supabaseUrl && supabaseKey) {
+    const supabase = createClient(supabaseUrl, supabaseKey, {
+      auth: { persistSession: false },
+    });
+    const { data } = await supabase
+      .from('settings')
+      .select('*')
+      .limit(1)
+      .maybeSingle();
+    if (data) content = { ...fallback, ...rowToContent(data) };
+  } else {
+    console.warn(
+      '[supabase] Faltan PUBLIC_SUPABASE_URL o PUBLIC_SUPABASE_ANON_KEY, usando valores locales.'
+    );
+  }
 } catch (error) {
   console.warn(
-    '[sanity] No se pudo cargar el contenido, usando valores locales:',
+    '[supabase] No se pudo cargar el contenido, usando valores locales:',
     error
   );
 }
@@ -181,7 +209,11 @@ const trust = content.trustItems;
 
         <div class="hero-visual" aria-hidden="true">
           <div class="hero-badge">
-            <img src="/logo.webp" alt="" />
+            {content.heroImageUrl ? (
+              <img class="hero-photo" src={`${supabaseStorage}/${content.heroImageUrl}?width=900`} alt="" />
+            ) : (
+              <img src="/logo.webp" alt="" />
+            )}
           </div>
         </div>
       </div>
@@ -198,6 +230,10 @@ const trust = content.trustItems;
           "{content.aboutQuote}"
         </blockquote>
         <p class="about-text reveal">{content.aboutText}</p>
+
+        {content.aboutImageUrl && (
+          <img class="about-photo reveal" src={`${supabaseStorage}/${content.aboutImageUrl}?width=1200`} alt="Varadero Taxi Tour" />
+        )}
 
         <ul class="trust-grid">
           {trust.map((item) => (
@@ -257,6 +293,17 @@ const trust = content.trustItems;
             <Icon name="instagram" size={18} /> Instagram
           </a>
         </div>
+      </div>
+    </section>
+
+    <!-- ===================== COMENTARIOS ===================== -->
+    <section id="comentarios" class="section comments">
+      <div class="container">
+        <div class="section-head reveal">
+          <p class="eyebrow">Comentarios</p>
+          <h2>Lo que dicen nuestros pasajeros</h2>
+        </div>
+        <Comments client:load />
       </div>
     </section>
   </main>
@@ -377,6 +424,11 @@ const trust = content.trustItems;
     object-fit: contain;
     filter: drop-shadow(0 12px 20px rgba(6, 40, 45, 0.35));
   }
+  .hero-badge .hero-photo {
+    object-fit: cover;
+    border-radius: 50%;
+    filter: none;
+  }
 
   .hero-wave {
     display: block;
@@ -411,6 +463,11 @@ const trust = content.trustItems;
     font-size: 1.05rem;
     max-width: 62ch;
     margin-inline: auto;
+  }
+  .about-photo {
+    margin: 34px auto 0;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
   }
 
   .trust-grid {
@@ -559,6 +616,10 @@ const trust = content.trustItems;
     color: var(--white);
   }
   .btn-outline-light:hover { background: rgba(255, 255, 255, 0.14); }
+
+  /* ===================== COMENTARIOS ===================== */
+  .comments { background: var(--sand-lt); }
+  .comments .section-head h2 { max-width: 24ch; margin-inline: auto; }
 
   /* ===================== FOOTER ===================== */
   .site-footer {

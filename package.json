@@ -7,17 +7,14 @@
     "dev": "astro dev",
     "start": "astro dev",
     "build": "astro build",
-    "preview": "astro preview",
-    "seed": "sanity documents create scripts/seed-siteSettings.json --dataset production --replace"
+    "preview": "astro preview"
   },
   "dependencies": {
     "@astrojs/react": "^4.4.2",
-    "@sanity/astro": "^3.5.0",
-    "@sanity/client": "^8.1.0",
+    "@supabase/supabase-js": "^2.112.3",
     "astro": "^5.18.2",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "sanity": "^6.10.1"
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@types/react": "^19.2.18",
