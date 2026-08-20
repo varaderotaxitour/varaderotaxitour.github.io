@@ -76,7 +76,7 @@ export default function AdminApp() {
   const [settings, setSettings] = useState<Settings>(emptySettings);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [savedFlash, setSavedFlash] = useState(false);
+  const [deployStatus, setDeployStatus] = useState<'idle' | 'publishing' | 'published' | 'failed'>('idle');
 
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [uploads, setUploads] = useState<UploadRow[]>([]);
@@ -147,8 +147,36 @@ export default function AdminApp() {
     if (error) {
       flash('Error al guardar: ' + error.message);
     } else {
-      flash('Contenido guardado ✓');
+      setDeployStatus('publishing');
+      trackDeploy(Date.now());
     }
+  }
+
+  function trackDeploy(since: number) {
+    const deadline = Date.now() + 4 * 60 * 1000;
+    const url =
+      'https://api.github.com/repos/varaderotaxitour/varaderotaxitour.github.io/actions/runs' +
+      '?event=repository_dispatch&per_page=1';
+    const tick = async () => {
+      try {
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          const run = data.workflow_runs?.[0];
+          if (run && new Date(run.created_at).getTime() >= since) {
+            if (run.status === 'completed') {
+              setDeployStatus(run.conclusion === 'success' ? 'published' : 'failed');
+              return;
+            }
+          }
+        }
+      } catch {
+        /* sin red o GitHub lento: seguimos intentando */
+      }
+      if (Date.now() < deadline) window.setTimeout(tick, 15000);
+      else setDeployStatus('failed');
+    };
+    tick();
   }
 
   async function loadComments() {
@@ -207,7 +235,7 @@ export default function AdminApp() {
       .update({ [field]: path, updated_at: new Date().toISOString() })
       .eq('id', 1);
     setField(field, path);
-    flash('Foto asignada ✓ (se verá tras re-desplegar el sitio)');
+    flash('Foto asignada ✓ El sitio se publicará automáticamente.');
   }
 
   async function deleteUpload(upload: UploadRow) {
@@ -282,12 +310,24 @@ export default function AdminApp() {
       <main className="admin-main">
         {notice && <p className="admin-notice">{notice}</p>}
 
+        {deployStatus === 'publishing' && (
+          <p className="admin-notice">Guardado ✓ — publicando el sitio (~2 minutos)…</p>
+        )}
+        {deployStatus === 'published' && (
+          <p className="admin-notice admin-notice-ok">Sitio publicado ✓ Ya puedes ver los cambios.</p>
+        )}
+        {deployStatus === 'failed' && (
+          <p className="admin-notice admin-notice-error">
+            No se pudo publicar automáticamente. Revisa las Actions de GitHub.
+          </p>
+        )}
+
         {tab === 'contenido' && (
           <section className="admin-panel">
             <h2>Contenido del sitio</h2>
             <p className="admin-hint">
-              Los cambios se guardan en Supabase. Para que se vean en la web hay que
-              re-desplegar (haz push al repo o ejecuta el workflow de GitHub).
+              Al guardar, el sitio se publica automáticamente en unos 2 minutos.
+              Los comentarios se moderan al instante.
             </p>
 
             <fieldset>
@@ -532,7 +572,7 @@ export default function AdminApp() {
             <h2>Fotos</h2>
             <p className="admin-hint">
               Sube fotos y asígnalas al hero (foto principal) o a la sección "Nosotros".
-              Se mostrarán tras re-desplegar el sitio.
+              Se mostrarán automáticamente tras publicarse el sitio (~2 minutos).
             </p>
 
             <div className="admin-upload">
