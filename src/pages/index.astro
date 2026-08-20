@@ -152,10 +152,17 @@ const trust = content.trustItems;
         <a href="#nosotros">Nosotros</a>
         <a href="#contacto">Contacto</a>
       </nav>
-      <a class="btn btn-primary header-cta" href={whatsappHref} target="_blank" rel="noopener">
-        <Icon name="whatsapp" size={18} /> Reservar
-      </a>
+      <button class="mobile-toggle" type="button" aria-label="Abrir menú" aria-expanded="false" aria-controls="mobile-nav">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
     </div>
+    <nav id="mobile-nav" class="mobile-nav" aria-label="Navegación móvil">
+      <a href="#rutas">Rutas &amp; precios</a>
+      <a href="#nosotros">Nosotros</a>
+      <a href="#contacto">Contacto</a>
+    </nav>
   </header>
 
   <main id="top">
@@ -167,9 +174,6 @@ const trust = content.trustItems;
           <h1>{content.heroTitle}</h1>
           <p class="hero-lead">{content.heroLead}</p>
           <div class="hero-actions">
-            <a class="btn btn-primary" href={whatsappHref} target="_blank" rel="noopener">
-              <Icon name="whatsapp" size={20} /> Reservar por WhatsApp
-            </a>
             <a class="btn btn-ghost" href="#rutas">Ver rutas y precios</a>
           </div>
           <p class="hero-note">{content.heroNote}</p>
@@ -246,9 +250,6 @@ const trust = content.trustItems;
         <p class="cta-lead">{content.ctaLead}</p>
 
         <div class="cta-actions">
-          <a class="btn btn-primary" href={whatsappHref} target="_blank" rel="noopener">
-            <Icon name="whatsapp" size={20} /> Escribir por WhatsApp
-          </a>
           <a class="btn btn-outline-light" href={`tel:+${content.whatsappNumber}`}>
             <Icon name="phone" size={18} /> {phoneDisplay}
           </a>
@@ -266,14 +267,13 @@ const trust = content.trustItems;
         <img src="/logo.webp" alt="Varadero Taxi Tour" />
         <p>{content.footerTagline}</p>
       </div>
-      <ul class="footer-links">
-        <li><a href={whatsappHref} target="_blank" rel="noopener">WhatsApp: {phoneDisplay}</a></li>
-        <li><a href={instagramHref} target="_blank" rel="noopener">Instagram</a></li>
-        <li><a href="#rutas">Rutas &amp; precios</a></li>
-      </ul>
       <p class="footer-note">© {new Date().getFullYear()} {content.footerCopyright}</p>
     </div>
   </footer>
+
+  <a class="whatsapp-float" href={whatsappHref} target="_blank" rel="noopener" aria-label="Reservar por WhatsApp">
+    <Icon name="whatsapp" size={30} />
+  </a>
 </Layout>
 
 <style>
@@ -307,7 +307,6 @@ const trust = content.trustItems;
     transition: color 0.15s ease;
   }
   .main-nav a:hover { color: var(--teal-deep); }
-  .header-cta { padding: 10px 20px; font-size: 0.92rem; flex-shrink: 0; }
 
   @media (max-width: 760px) {
     .main-nav { display: none; }
@@ -577,9 +576,6 @@ const trust = content.trustItems;
   .footer-brand { display: flex; align-items: center; gap: 14px; }
   .footer-brand img { height: 40px; width: auto; border-radius: 50%; }
   .footer-brand p { font-size: 0.88rem; color: rgba(255, 255, 255, 0.65); }
-  .footer-links { display: flex; gap: 22px; flex-wrap: wrap; font-size: 0.92rem; }
-  .footer-links a { text-decoration: none; color: rgba(255, 255, 255, 0.85); }
-  .footer-links a:hover { color: var(--gold); }
   .footer-note {
     width: 100%;
     margin-top: 8px;
@@ -587,4 +583,111 @@ const trust = content.trustItems;
     color: rgba(255, 255, 255, 0.45);
     text-align: center;
   }
+
+  /* ===================== WHATSAPP FLOTANTE ===================== */
+  .whatsapp-float {
+    position: fixed;
+    right: 22px;
+    bottom: 22px;
+    z-index: 60;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 62px;
+    height: 62px;
+    border-radius: 50%;
+    background: var(--gold);
+    color: var(--ink);
+    text-decoration: none;
+    box-shadow: var(--shadow-card);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+  }
+  .whatsapp-float:hover {
+    transform: translateY(-3px);
+    background: var(--gold-dark);
+    color: var(--white);
+    box-shadow: 0 16px 32px -8px rgba(11, 50, 56, 0.35);
+  }
+
+  @media (max-width: 480px) {
+    .whatsapp-float { right: 16px; bottom: 16px; width: 56px; height: 56px; }
+  }
+
+  /* ===================== MENÚ MÓVIL ===================== */
+  .mobile-toggle {
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    width: 46px;
+    height: 46px;
+    padding: 10px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    cursor: pointer;
+  }
+  .mobile-toggle span {
+    display: block;
+    height: 3px;
+    width: 100%;
+    border-radius: 3px;
+    background: var(--teal-deep);
+    transition: transform 0.2s ease, opacity 0.2s ease;
+  }
+  .mobile-toggle.is-open span:nth-child(1) { transform: translateY(8px) rotate(45deg); }
+  .mobile-toggle.is-open span:nth-child(2) { opacity: 0; }
+  .mobile-toggle.is-open span:nth-child(3) { transform: translateY(-8px) rotate(-45deg); }
+
+  .mobile-nav {
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px 24px 18px;
+    background: rgba(251, 247, 238, 0.97);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(12, 102, 114, 0.12);
+  }
+  .mobile-nav.is-open { display: flex; }
+  .mobile-nav a {
+    padding: 12px 10px;
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+    color: var(--ink-soft);
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: 1rem;
+  }
+  .mobile-nav a:hover { background: var(--sand-lt); color: var(--teal-deep); }
+
+  @media (max-width: 760px) {
+    .mobile-toggle { display: flex; }
+  }
 </style>
+
+<script>
+  const toggle = document.querySelector('.mobile-toggle');
+  const mobileNav = document.querySelector('#mobile-nav');
+
+  function closeMenu() {
+    toggle?.classList.remove('is-open');
+    mobileNav?.classList.remove('is-open');
+    toggle?.setAttribute('aria-expanded', 'false');
+    toggle?.setAttribute('aria-label', 'Abrir menú');
+  }
+
+  toggle?.addEventListener('click', () => {
+    const isOpen = mobileNav?.classList.toggle('is-open');
+    toggle.classList.toggle('is-open', isOpen);
+    toggle.setAttribute('aria-expanded', String(isOpen));
+    toggle.setAttribute('aria-label', isOpen ? 'Cerrar menú' : 'Abrir menú');
+  });
+
+  mobileNav?.addEventListener('click', (event) => {
+    if ((event.target as HTMLElement).tagName === 'A') closeMenu();
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeMenu();
+  });
+</script>
