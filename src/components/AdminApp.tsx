@@ -5,7 +5,7 @@ import './admin.css';
 const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL as string;
 const supabaseKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
 const ICONS = [
   'plane', 'wave', 'landmark', 'flag', 'palm', 'dolphin', 'pin', 'glass',
@@ -84,6 +84,7 @@ export default function AdminApp() {
   const [notice, setNotice] = useState('');
 
   useEffect(() => {
+    if (!supabase) return;
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) =>
       setSession(session)
@@ -92,6 +93,7 @@ export default function AdminApp() {
   }, []);
 
   useEffect(() => {
+    if (!supabase) return;
     if (session && !settingsLoaded) {
       supabase
         .from('settings')
@@ -114,6 +116,10 @@ export default function AdminApp() {
   async function handleLogin(event: React.FormEvent) {
     event.preventDefault();
     setAuthError('');
+    if (!supabase) {
+      setAuthError('Configuración de Supabase no disponible.');
+      return;
+    }
     setAuthBusy(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setAuthBusy(false);
@@ -121,6 +127,7 @@ export default function AdminApp() {
   }
 
   async function handleLogout() {
+    if (!supabase) return;
     await supabase.auth.signOut();
     setSettingsLoaded(false);
   }
@@ -130,6 +137,7 @@ export default function AdminApp() {
   }
 
   async function saveSettings() {
+    if (!supabase) return;
     setSaving(true);
     const { error } = await supabase
       .from('settings')
@@ -144,6 +152,7 @@ export default function AdminApp() {
   }
 
   async function loadComments() {
+    if (!supabase) return;
     const { data } = await supabase
       .from('comments')
       .select('*')
@@ -152,17 +161,20 @@ export default function AdminApp() {
   }
 
   async function setApproved(comment: CommentRow, approved: boolean) {
+    if (!supabase) return;
     await supabase.from('comments').update({ approved }).eq('id', comment.id);
     loadComments();
   }
 
   async function deleteComment(comment: CommentRow) {
+    if (!supabase) return;
     if (!window.confirm('¿Eliminar este comentario?')) return;
     await supabase.from('comments').delete().eq('id', comment.id);
     loadComments();
   }
 
   async function loadUploads() {
+    if (!supabase) return;
     const { data } = await supabase.storage.from('fotos').list('galeria', {
       sortBy: { column: 'created_at', order: 'desc' },
     });
@@ -170,6 +182,7 @@ export default function AdminApp() {
   }
 
   async function handleUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    if (!supabase) return;
     const file = event.target.files?.[0];
     if (!file) return;
     setUploadBusy(true);
@@ -188,6 +201,7 @@ export default function AdminApp() {
   }
 
   async function assignPhoto(path: string, field: 'hero_image_url' | 'about_image_url') {
+    if (!supabase) return;
     await supabase
       .from('settings')
       .update({ [field]: path, updated_at: new Date().toISOString() })
@@ -197,6 +211,7 @@ export default function AdminApp() {
   }
 
   async function deleteUpload(upload: UploadRow) {
+    if (!supabase) return;
     if (!window.confirm('¿Eliminar esta foto del almacenamiento?')) return;
     const { error } = await supabase.storage.from('fotos').remove([`galeria/${upload.name}`]);
     if (!error) loadUploads();

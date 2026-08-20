@@ -37,8 +37,8 @@ jobs:
 
       - name: Build
         env:
-          PUBLIC_SANITY_PROJECT_ID: ${{ vars.PUBLIC_SANITY_PROJECT_ID }}
-          PUBLIC_SANITY_DATASET: ${{ vars.PUBLIC_SANITY_DATASET }}
+          PUBLIC_SUPABASE_URL: ${{ vars.PUBLIC_SUPABASE_URL }}
+          PUBLIC_SUPABASE_ANON_KEY: ${{ vars.PUBLIC_SUPABASE_ANON_KEY }}
         run: pnpm build
 
       - name: SPA fallback for /admin

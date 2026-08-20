@@ -12,7 +12,7 @@ type Comment = {
 const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL as string;
 const supabaseKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string;
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
 export default function Comments() {
   const [comments, setComments] = useState<Comment[]>([]);
@@ -24,6 +24,7 @@ export default function Comments() {
   const [sent, setSent] = useState(false);
 
   useEffect(() => {
+    if (!supabase) return;
     supabase
       .from('comments')
       .select('id, name, message, created_at')
@@ -39,6 +40,10 @@ export default function Comments() {
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
+    if (!supabase) {
+      setError('Los comentarios no están disponibles ahora mismo.');
+      return;
+    }
     const cleanName = name.trim();
     const cleanMessage = message.trim();
     if (cleanName.length < 2 || cleanName.length > 60) {
