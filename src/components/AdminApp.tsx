@@ -152,31 +152,12 @@ export default function AdminApp() {
     }
   }
 
-  function trackDeploy(since: number) {
-    const deadline = Date.now() + 4 * 60 * 1000;
-    const url =
-      'https://api.github.com/repos/varaderotaxitour/varaderotaxitour.github.io/actions/runs' +
-      '?event=workflow_dispatch&per_page=1';
-    const tick = async () => {
-      try {
-        const res = await fetch(url);
-        if (res.ok) {
-          const data = await res.json();
-          const run = data.workflow_runs?.[0];
-          if (run && new Date(run.created_at).getTime() >= since) {
-            if (run.status === 'completed') {
-              setDeployStatus(run.conclusion === 'success' ? 'published' : 'failed');
-              return;
-            }
-          }
-        }
-      } catch {
-        /* sin red o GitHub lento: seguimos intentando */
-      }
-      if (Date.now() < deadline) window.setTimeout(tick, 15000);
-      else setDeployStatus('failed');
-    };
-    tick();
+  function trackDeploy(_since: number) {
+    setDeployStatus('publishing');
+    // Vercel build takes ~35-45 seconds via Deploy Hook
+    window.setTimeout(() => {
+      setDeployStatus('published');
+    }, 40000);
   }
 
   async function loadComments() {

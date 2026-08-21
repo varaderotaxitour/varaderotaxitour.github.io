@@ -19,7 +19,7 @@ Abre `http://localhost:4321`.
 El panel vive en tu propio sitio:
 
 - **Local:** `http://localhost:4321/admin`
-- **Producción:** `https://varaderotaxitour.github.io/admin`
+- **Producción:** Tu dominio en Vercel (ej. `https://varaderotaxitour.vercel.app/admin`)
 
 Ahí editas todo el contenido: contacto (WhatsApp/Instagram/teléfono), hero,
 sección nosotros, rutas y precios, CTA y footer. También moderas los
@@ -35,9 +35,8 @@ usuario de administración; cualquiera con una cuenta podría editar contenido.
 ### Importante
 
 - El sitio es **estático**: el contenido se descarga de Supabase durante el
-  build (`pnpm build`). Al guardar cambios en el panel hay que **re-desplegar**
-  (push a `main` o ejecutar el workflow "Deploy to GitHub Pages") para que
-  aparezcan en producción. Si Supabase no responde, la página usa el contenido
+  build (`pnpm build`). Al guardar cambios en el panel, **se publica automáticamente en Vercel**
+  gracias al Deploy Hook configurado con Supabase. Si Supabase no responde, la página usa el contenido
   de respaldo definido en `src/pages/index.astro` (fallback).
 - Los **comentarios** de los visitantes se guardan en tiempo real: quien
   escribe solo ve su comentario tras ser **aprobado** en el panel.
