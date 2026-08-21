@@ -401,3 +401,110 @@
   cursor: not-allowed;
   transform: none;
 }
+
+/* ===================== CARROS ADMIN ===================== */
+.admin-car-form-row {
+  display: flex;
+  gap: 16px;
+  align-items: end;
+}
+.admin-car-form-row label:first-child {
+  flex: 0 0 140px;
+}
+.admin-check {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px !important;
+  font-weight: 600;
+}
+.admin-check input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--teal);
+}
+.admin-car-form-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.admin-cars {
+  display: grid;
+  gap: 18px;
+  list-style: none;
+  padding: 0;
+}
+.admin-car-card {
+  background: var(--white);
+  border-radius: var(--radius-md);
+  padding: 18px;
+  box-shadow: var(--shadow-soft);
+  border-left: 5px solid var(--teal);
+  display: grid;
+  gap: 10px;
+}
+.admin-car-card.inactive {
+  border-left-color: var(--gold);
+  opacity: 0.85;
+}
+.admin-car-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.admin-car-head h3 {
+  color: var(--teal-deep);
+  font-size: 1.1rem;
+  margin-right: auto;
+}
+.admin-car-order {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  background: var(--sand-lt);
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+.admin-car-details {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--gold-dark);
+}
+.admin-car-desc {
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+.admin-car-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+}
+.admin-car-photo {
+  display: grid;
+  gap: 6px;
+  background: var(--cream);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  padding: 6px;
+}
+.admin-car-photo img {
+  width: 100%;
+  height: 90px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+.admin-car-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(12, 102, 114, 0.1);
+}
+@media (max-width: 600px) {
+  .admin-car-form-row { flex-direction: column; align-items: stretch; }
+  .admin-car-form-row label:first-child { flex: 1; }
+}

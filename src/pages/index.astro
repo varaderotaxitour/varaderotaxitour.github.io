@@ -126,7 +126,18 @@ function rowToContent(row: any) {
   };
 }
 
+type Car = {
+  id: number;
+  name: string;
+  description: string;
+  details: string | null;
+  photos: string[];
+  is_active: boolean;
+  sort_order: number;
+};
+
 let content = fallback;
+let cars: Car[] = [];
 try {
   if (supabaseUrl && supabaseKey) {
     const supabase = createClient(supabaseUrl, supabaseKey, {
@@ -138,6 +149,15 @@ try {
       .limit(1)
       .maybeSingle();
     if (data) content = { ...fallback, ...rowToContent(data) };
+
+    const { data: carsData, error: carsError } = await supabase
+      .from('cars')
+      .select('id, name, description, details, photos, is_active, sort_order')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: false });
+    if (!carsError && carsData) cars = carsData as Car[];
+    if (carsError) console.warn('[supabase] No se pudieron cargar los carros:', carsError.message);
   } else {
     console.warn(
       '[supabase] Faltan PUBLIC_SUPABASE_URL o PUBLIC_SUPABASE_ANON_KEY, usando valores locales.'
@@ -177,6 +197,7 @@ const trust = content.trustItems;
       </a>
       <nav class="main-nav" aria-label="Navegación principal">
         <a href="#rutas">Rutas &amp; precios</a>
+        <a href="#carros">Carros</a>
         <a href="#nosotros">Nosotros</a>
         <a href="#contacto">Contacto</a>
       </nav>
@@ -188,6 +209,7 @@ const trust = content.trustItems;
     </div>
     <nav id="mobile-nav" class="mobile-nav" aria-label="Navegación móvil">
       <a href="#rutas">Rutas &amp; precios</a>
+      <a href="#carros">Carros</a>
       <a href="#nosotros">Nosotros</a>
       <a href="#contacto">Contacto</a>
     </nav>
@@ -277,6 +299,69 @@ const trust = content.trustItems;
         </ol>
       </div>
     </section>
+
+    <!-- ===================== CARROS DISPONIBLES ===================== -->
+    {cars.length > 0 && (
+      <section id="carros" class="section cars">
+        <div class="container">
+          <div class="section-head reveal">
+            <p class="eyebrow">Nuestra flota</p>
+            <h2>Carros disponibles</h2>
+            <p>
+              Elige tu favorito y vive Varadero a tu ritmo. Todos con chofer privado,
+              aire acondicionado y el encanto de un clásico bien cuidado.
+            </p>
+          </div>
+
+          <div class="cars-grid">
+            {cars.map((car) => (
+              <article class="car-card reveal">
+                <div class="car-photos">
+                  {car.photos && car.photos.length > 0 ? (
+                    <>
+                      <img
+                        class="car-photo-main"
+                        src={`${supabaseStorage}/${car.photos[0]}?width=800`}
+                        alt={car.name}
+                        loading="lazy"
+                      />
+                      {car.photos.length > 1 && (
+                        <div class="car-thumbs">
+                          {car.photos.slice(1, 5).map((photo) => (
+                            <img
+                              src={`${supabaseStorage}/${photo}?width=400`}
+                              alt=""
+                              loading="lazy"
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div class="car-photo-placeholder">
+                      <Icon name="car" size={48} />
+                    </div>
+                  )}
+                </div>
+                <div class="car-body">
+                  <h3>{car.name}</h3>
+                  {car.details && <p class="car-details">{car.details}</p>}
+                  <p class="car-desc">{car.description}</p>
+                  <a
+                    class="btn btn-primary car-cta"
+                    href={`https://wa.me/${content.whatsappNumber}?text=${encodeURIComponent(`Hola! Me interesa reservar el carro "${car.name}" con Varadero Taxi Tour.`)}`}
+                    target="_blank"
+                    rel="noopener"
+                  >
+                    <Icon name="whatsapp" size={18} /> Reservar este carro
+                  </a>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+    )}
 
     <!-- ===================== CTA FINAL ===================== -->
     <section id="contacto" class="section cta-final">
@@ -584,6 +669,90 @@ const trust = content.trustItems;
     .route-list::before { left: 17px; }
     .route-stop { grid-template-columns: 36px 1fr; gap: 12px; }
     .route-card { padding: 18px; }
+  }
+
+  /* ===================== CARROS ===================== */
+  .cars { background: var(--cream); }
+  .cars-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 28px;
+  }
+  .car-card {
+    background: var(--white);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    box-shadow: var(--shadow-soft);
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .car-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-card);
+  }
+  .car-photos {
+    position: relative;
+    background: var(--sand-lt);
+  }
+  .car-photo-main {
+    width: 100%;
+    height: 220px;
+    object-fit: cover;
+    display: block;
+  }
+  .car-thumbs {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+    padding: 4px;
+    background: var(--white);
+  }
+  .car-thumbs img {
+    width: 100%;
+    height: 64px;
+    object-fit: cover;
+    border-radius: 6px;
+  }
+  .car-photo-placeholder {
+    height: 220px;
+    display: grid;
+    place-items: center;
+    color: var(--teal);
+    background: var(--sand-lt);
+  }
+  .car-body {
+    padding: 22px 22px 24px;
+    display: grid;
+    gap: 10px;
+    flex: 1;
+  }
+  .car-body h3 {
+    font-size: 1.22rem;
+    color: var(--teal-deep);
+    line-height: 1.15;
+  }
+  .car-details {
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: var(--gold-dark);
+    letter-spacing: 0.02em;
+  }
+  .car-desc {
+    color: var(--ink-soft);
+    font-size: 0.96rem;
+    line-height: 1.55;
+  }
+  .car-cta {
+    margin-top: 8px;
+    justify-content: center;
+    width: fit-content;
+    padding: 10px 20px;
+    font-size: 0.92rem;
+  }
+  @media (max-width: 560px) {
+    .cars-grid { grid-template-columns: 1fr; }
+    .car-photo-main { height: 200px; }
   }
 
   /* ===================== CTA FINAL ===================== */
