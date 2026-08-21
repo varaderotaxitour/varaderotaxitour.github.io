@@ -2,6 +2,7 @@
 import Layout from '../layouts/Layout.astro';
 import Icon from '../components/Icon.astro';
 import Comments from '../components/Comments';
+import RouteLightbox from '../components/RouteLightbox';
 import { createClient } from '@supabase/supabase-js';
 
 const fallback = {
@@ -136,8 +137,19 @@ type Car = {
   sort_order: number;
 };
 
+type RouteRow = {
+  id: number;
+  title: string;
+  description: string;
+  icon: string;
+  price_from: number;
+  price_to: number;
+  photos: string[];
+};
+
 let content = fallback;
 let cars: Car[] = [];
+let routeRows: RouteRow[] = [];
 try {
   if (supabaseUrl && supabaseKey) {
     const supabase = createClient(supabaseUrl, supabaseKey, {
@@ -158,6 +170,18 @@ try {
       .order('created_at', { ascending: false });
     if (!carsError && carsData) cars = carsData as Car[];
     if (carsError) console.warn('[supabase] No se pudieron cargar los carros:', carsError.message);
+
+    const { data: routesData, error: routesError } = await supabase
+      .from('routes')
+      .select('id, title, description, icon, price_from, price_to, photos')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: false });
+    if (!routesError && routesData && routesData.length > 0) {
+      routeRows = routesData as RouteRow[];
+    } else if (routesError) {
+      console.warn('[supabase] No se pudieron cargar las rutas:', routesError.message);
+    }
   } else {
     console.warn(
       '[supabase] Faltan PUBLIC_SUPABASE_URL o PUBLIC_SUPABASE_ANON_KEY, usando valores locales.'
@@ -176,12 +200,21 @@ const whatsappHref = `https://wa.me/${content.whatsappNumber}?text=${encodeURICo
 const instagramHref = content.instagramUrl;
 const phoneDisplay = content.phoneDisplay;
 
-const stops = content.routes.map((route) => ({
-  icon: route.icon,
-  title: route.title,
-  desc: route.description,
-  price: `${route.priceFrom} – ${route.priceTo}`,
-}));
+const stops = (routeRows.length > 0
+  ? routeRows.map((route) => ({
+      icon: route.icon,
+      title: route.title,
+      desc: route.description,
+      price: `${route.price_from} – ${route.price_to}`,
+      photos: route.photos ?? [],
+    }))
+  : content.routes.map((route) => ({
+      icon: route.icon,
+      title: route.title,
+      desc: route.description,
+      price: `${route.priceFrom} – ${route.priceTo}`,
+      photos: [] as string[],
+    })));
 
 const trust = content.trustItems;
 ---
@@ -281,22 +314,66 @@ const trust = content.trustItems;
           </p>
         </div>
 
-        <ol class="route-list">
+        <div class="routes-grid">
           {stops.map((stop) => (
-            <li class="route-stop reveal">
-              <div class="route-marker" aria-hidden="true">
-                <Icon name={stop.icon as any} size={22} />
-              </div>
-              <div class="route-card">
+            <article class="route-card reveal">
+              {stop.photos.length > 0 ? (
+                <button
+                  class="route-photo-main"
+                  type="button"
+                  data-route-index={stops.indexOf(stop)}
+                  data-photo-index={0}
+                  aria-label={`Ver ${stop.photos.length} foto${stop.photos.length > 1 ? 's' : ''} de ${stop.title}`}
+                >
+                  <img
+                    src={`${supabaseStorage}/${stop.photos[0]}?width=800&quality=80`}
+                    alt={stop.title}
+                    loading="lazy"
+                  />
+                  <span class="photo-count">{stop.photos.length}</span>
+                </button>
+              ) : (
+                <div class="route-photo-placeholder" aria-hidden="true">
+                  <Icon name={stop.icon as any} size={40} />
+                </div>
+              )}
+              <div class="route-body">
                 <div class="route-card-head">
-                  <h3>{stop.title}</h3>
+                  <h3>
+                    <span class="route-icon" aria-hidden="true"><Icon name={stop.icon as any} size={16} /></span>
+                    {stop.title}
+                  </h3>
                   <span class="price-pill">{stop.price} <small>USD/EUR</small></span>
                 </div>
                 <p>{stop.desc}</p>
+                {stop.photos.length > 1 && (
+                  <div class="route-thumbs">
+                    {stop.photos.slice(1).map((photo, thumbIdx) => (
+                      <button
+                        class="route-thumb"
+                        type="button"
+                        data-route-index={stops.indexOf(stop)}
+                        data-photo-index={thumbIdx + 1}
+                        aria-label={`Abrir foto ${thumbIdx + 2} de ${stop.title}`}
+                      >
+                        <img
+                          src={`${supabaseStorage}/${photo}?width=200&quality=70`}
+                          alt=""
+                          loading="lazy"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-            </li>
+            </article>
           ))}
-        </ol>
+        </div>
+        <script
+          type="application/json"
+          id="routes-lightbox-data"
+          set:html={JSON.stringify(stops.map((stop) => ({ title: stop.title, photos: stop.photos })))}
+        />
       </div>
     </section>
 
@@ -392,6 +469,8 @@ const trust = content.trustItems;
       </div>
     </section>
   </main>
+
+  <RouteLightbox client:load />
 
   <footer class="site-footer">
     <div class="container footer-inner">
@@ -586,89 +665,145 @@ const trust = content.trustItems;
     .trust-grid { grid-template-columns: 1fr; }
   }
 
-  /* ===================== RUTAS (signature timeline) ===================== */
+  /* ===================== RUTAS (grid 2 columnas) ===================== */
   .routes { background: var(--sand-lt); }
 
-  .route-list {
-    position: relative;
+  .routes-grid {
     display: grid;
-    gap: 26px;
-    counter-reset: stop;
-  }
-  .route-list::before {
-    content: '';
-    position: absolute;
-    left: 21px;
-    top: 8px;
-    bottom: 8px;
-    width: 0;
-    border-left: 3px dashed var(--turquoise);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+    align-items: start;
   }
 
-  .route-stop {
-    position: relative;
-    display: grid;
-    grid-template-columns: 44px 1fr;
-    gap: 18px;
-    counter-increment: stop;
-  }
-  .route-marker {
-    position: relative;
-    z-index: 1;
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    background: var(--teal-deep);
-    color: var(--white);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 0 0 6px var(--sand-lt);
-  }
   .route-card {
     background: var(--white);
     border-radius: var(--radius-md);
-    padding: 22px 24px;
+    overflow: hidden;
     box-shadow: var(--shadow-soft);
+    display: flex;
+    flex-direction: column;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
   }
-  .route-stop:hover .route-card {
+  .route-card:hover {
     transform: translateY(-3px);
     box-shadow: var(--shadow-card);
+  }
+
+  .route-photo-main {
+    position: relative;
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: none;
+    background: var(--sand-lt);
+    cursor: zoom-in;
+  }
+  .route-photo-main img {
+    width: 100%;
+    height: 150px;
+    object-fit: cover;
+    display: block;
+    transition: transform 0.25s ease;
+  }
+  .route-photo-main:hover img { transform: scale(1.04); }
+  .photo-count {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: rgba(6, 40, 45, 0.72);
+    color: var(--white);
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .photo-count::before { content: '📷 '; font-size: 0.7rem; }
+
+  .route-photo-placeholder {
+    height: 110px;
+    display: grid;
+    place-items: center;
+    color: var(--teal);
+    background: linear-gradient(160deg, var(--turquoise-lt), var(--sand-lt));
+  }
+
+  .route-body {
+    padding: 14px 16px 16px;
+    display: grid;
+    gap: 8px;
+    flex: 1;
+    align-content: start;
   }
   .route-card-head {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 10px 16px;
+    gap: 8px 12px;
   }
   .route-card-head h3 {
-    font-size: 1.12rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1rem;
+    color: var(--teal-deep);
+    line-height: 1.25;
+  }
+  .route-icon {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--turquoise-lt);
     color: var(--teal-deep);
   }
-  .route-card p {
-    margin-top: 10px;
+  .route-body p {
     color: var(--ink-soft);
-    font-size: 0.97rem;
+    font-size: 0.9rem;
+    line-height: 1.5;
   }
+
+  .route-thumbs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 2px;
+  }
+  .route-thumb {
+    padding: 0;
+    border: none;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: zoom-in;
+    background: var(--sand-lt);
+  }
+  .route-thumb img {
+    width: 56px;
+    height: 44px;
+    object-fit: cover;
+    display: block;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+  }
+  .route-thumb:hover img { transform: scale(1.08); opacity: 0.85; }
+
   .price-pill {
     font-family: var(--font-display);
     font-weight: 600;
-    font-size: 0.95rem;
+    font-size: 0.85rem;
     color: var(--teal-deep);
     background: var(--turquoise-lt);
-    padding: 6px 14px;
+    padding: 4px 12px;
     border-radius: 999px;
     white-space: nowrap;
   }
   .price-pill small { font-weight: 500; opacity: 0.75; font-size: 0.72em; }
 
-  @media (max-width: 560px) {
-    .route-marker { width: 36px; height: 36px; }
-    .route-list::before { left: 17px; }
-    .route-stop { grid-template-columns: 36px 1fr; gap: 12px; }
-    .route-card { padding: 18px; }
+  @media (max-width: 860px) {
+    .routes-grid { grid-template-columns: 1fr; }
   }
 
   /* ===================== CARROS ===================== */
@@ -920,4 +1055,31 @@ const trust = content.trustItems;
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') closeMenu();
   });
+
+  // ---- Lightbox de rutas ----
+  const routesDataEl = document.getElementById('routes-lightbox-data');
+  if (routesDataEl) {
+    let routesLightbox: { title: string; photos: string[] }[] = [];
+    try {
+      routesLightbox = JSON.parse(routesDataEl.textContent || '[]');
+    } catch {
+      routesLightbox = [];
+    }
+    document.querySelectorAll<HTMLElement>('[data-route-index]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const route = routesLightbox[Number(btn.dataset.routeIndex)];
+        if (!route || !route.photos?.length) return;
+        window.dispatchEvent(
+          new CustomEvent('route-lightbox:open', {
+            detail: {
+              photos: route.photos,
+              title: route.title,
+              index: Number(btn.dataset.photoIndex) || 0,
+            },
+          })
+        );
+      });
+    });
+  }
+
 </script>

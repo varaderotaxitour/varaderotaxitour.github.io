@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createClient, type Session } from '@supabase/supabase-js';
+import { toWebp, toWebpAll } from './webp';
 import './admin.css';
 
 const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL as string;
@@ -67,6 +68,22 @@ type CarRow = {
   updated_at: string;
 };
 
+type RouteRow = {
+  id: number;
+  title: string;
+  description: string;
+  icon: string;
+  price_from: number;
+  price_to: number;
+  photos: string[];
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+type PendingPhoto = { file: File; url: string };
+
 const emptySettings: Settings = {
   seo_title: '', seo_description: '', whatsapp_number: '', whatsapp_message: '',
   phone_display: '', instagram_url: '', hero_eyebrow: '', hero_title: '',
@@ -83,7 +100,7 @@ export default function AdminApp() {
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
   const [authBusy, setAuthBusy] = useState(false);
-  const [tab, setTab] = useState<'contenido' | 'comentarios' | 'fotos' | 'carros'>('contenido');
+  const [tab, setTab] = useState<'contenido' | 'rutas' | 'carros' | 'comentarios' | 'fotos'>('contenido');
 
   const [settings, setSettings] = useState<Settings>(emptySettings);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
@@ -102,6 +119,19 @@ export default function AdminApp() {
   const [editingCarId, setEditingCarId] = useState<number | null>(null);
   const [carSaving, setCarSaving] = useState(false);
   const [carPhotoBusyId, setCarPhotoBusyId] = useState<number | null>(null);
+  const [pendingCarFiles, setPendingCarFiles] = useState<PendingPhoto[]>([]);
+
+  // ---- Rutas ----
+  const [routes, setRoutes] = useState<RouteRow[]>([]);
+  const [routesLoaded, setRoutesLoaded] = useState(false);
+  const [routeForm, setRouteForm] = useState({
+    title: '', description: '', icon: 'pin',
+    price_from: 0, price_to: 0, sort_order: 0, is_active: true,
+  });
+  const [editingRouteId, setEditingRouteId] = useState<number | null>(null);
+  const [routeSaving, setRouteSaving] = useState(false);
+  const [routePhotoBusyId, setRoutePhotoBusyId] = useState<number | null>(null);
+  const [pendingRouteFiles, setPendingRouteFiles] = useState<PendingPhoto[]>([]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -126,6 +156,7 @@ export default function AdminApp() {
       loadComments();
       loadUploads();
       loadCars();
+      loadRoutes();
     }
   }, [session, settingsLoaded]);
 
@@ -213,23 +244,56 @@ export default function AdminApp() {
     if (data) setUploads(data as unknown as UploadRow[]);
   }
 
+  function makePending(files: File[]): PendingPhoto[] {
+    return files.map((file) => ({ file, url: URL.createObjectURL(file) }));
+  }
+
+  function clearPending(entries: PendingPhoto[]) {
+    entries.forEach((entry) => URL.revokeObjectURL(entry.url));
+  }
+
+  async function uploadPhotos(folder: string, entries: PendingPhoto[]): Promise<string[]> {
+    if (!supabase) return [];
+    const paths: string[] = [];
+    for (const entry of entries) {
+      const converted = await toWebp(entry.file);
+      const safeName = converted.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${safeName}`;
+      const { error } = await supabase.storage.from('fotos').upload(path, converted, {
+        upsert: false,
+      });
+      if (error) throw new Error(error.message);
+      paths.push(path);
+    }
+    return paths;
+  }
+
   async function handleUpload(event: React.ChangeEvent<HTMLInputElement>) {
     if (!supabase) return;
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setUploadBusy(true);
-    const path = `galeria/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    const { error } = await supabase.storage.from('fotos').upload(path, file, {
-      upsert: false,
-    });
-    setUploadBusy(false);
+    const files = Array.from(event.target.files ?? []);
     event.target.value = '';
-    if (error) {
-      flash('Error al subir la foto: ' + error.message);
-      return;
+    if (files.length === 0) return;
+    setUploadBusy(true);
+    try {
+      const converted = await toWebpAll(files);
+      let ok = 0;
+      for (const file of converted) {
+        const path = `galeria/${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 7)}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+        const { error } = await supabase.storage.from('fotos').upload(path, file, {
+          upsert: false,
+        });
+        if (error) flash(`Error al subir ${file.name}: ${error.message}`);
+        else ok += 1;
+      }
+      if (ok > 0) {
+        loadUploads();
+        flash(`${ok} foto${ok > 1 ? 's' : ''} subida${ok > 1 ? 's' : ''} ✓ Ahora asígnala con los botones de abajo.`);
+      }
+    } finally {
+      setUploadBusy(false);
     }
-    loadUploads();
-    flash('Foto subida ✓ Ahora asígnala con los botones de abajo.');
   }
 
   async function assignPhoto(path: string, field: 'hero_image_url' | 'about_image_url') {
@@ -270,6 +334,8 @@ export default function AdminApp() {
   function resetCarForm() {
     setCarForm({ name: '', description: '', details: '', sort_order: 0, is_active: true });
     setEditingCarId(null);
+    clearPending(pendingCarFiles);
+    setPendingCarFiles([]);
   }
 
   function startEditCar(car: CarRow) {
@@ -295,31 +361,45 @@ export default function AdminApp() {
       return;
     }
     setCarSaving(true);
-    const payload = {
-      name: carForm.name.trim(),
-      description: carForm.description.trim(),
-      details: carForm.details.trim() || null,
-      sort_order: Number(carForm.sort_order) || 0,
-      is_active: carForm.is_active,
-    };
-    let error;
-    if (editingCarId) {
-      const res = await supabase.from('cars').update(payload).eq('id', editingCarId);
-      error = res.error;
-    } else {
-      const res = await supabase.from('cars').insert(payload).select().single();
-      error = res.error;
+    try {
+      const payload = {
+        name: carForm.name.trim(),
+        description: carForm.description.trim(),
+        details: carForm.details.trim() || null,
+        sort_order: Number(carForm.sort_order) || 0,
+        is_active: carForm.is_active,
+      };
+      let carId: number;
+      if (editingCarId) {
+        const { error } = await supabase.from('cars').update(payload).eq('id', editingCarId);
+        if (error) throw new Error(error.message);
+        carId = editingCarId;
+      } else {
+        const { data, error } = await supabase.from('cars').insert(payload).select('id').single();
+        if (error) throw new Error(error.message);
+        carId = data.id;
+      }
+      if (pendingCarFiles.length > 0) {
+        const existing = editingCarId ? cars.find((c) => c.id === carId)?.photos ?? [] : [];
+        const paths = await uploadPhotos(`cars/${carId}`, pendingCarFiles);
+        const { error: photoErr } = await supabase
+          .from('cars')
+          .update({ photos: [...existing, ...paths] })
+          .eq('id', carId);
+        if (photoErr) flash(`Carro guardado pero error al asignar fotos: ${photoErr.message}`);
+      }
+      clearPending(pendingCarFiles);
+      setPendingCarFiles([]);
+      flash(editingCarId ? 'Carro actualizado ✓' : 'Carro creado ✓');
+      resetCarForm();
+      loadCars();
+      setDeployStatus('publishing');
+      trackDeploy(Date.now());
+    } catch (err) {
+      flash('Error al guardar carro: ' + (err as Error).message);
+    } finally {
+      setCarSaving(false);
     }
-    setCarSaving(false);
-    if (error) {
-      flash('Error al guardar carro: ' + error.message);
-      return;
-    }
-    flash(editingCarId ? 'Carro actualizado ✓' : 'Carro creado ✓');
-    resetCarForm();
-    loadCars();
-    setDeployStatus('publishing');
-    trackDeploy(Date.now());
   }
 
   async function toggleCarActive(car: CarRow) {
@@ -353,32 +433,25 @@ export default function AdminApp() {
 
   async function handleCarPhotoUpload(car: CarRow, event: React.ChangeEvent<HTMLInputElement>) {
     if (!supabase) return;
-    const file = event.target.files?.[0];
-    if (!file) return;
-    if (car.photos && car.photos.length >= 5) {
-      flash('Máximo 5 fotos por carro. Elimina una antes de subir otra.');
-      event.target.value = '';
-      return;
-    }
-    setCarPhotoBusyId(car.id);
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const path = `cars/${car.id}/${Date.now()}-${safeName}`;
-    const { error: upErr } = await supabase.storage.from('fotos').upload(path, file, { upsert: false });
+    const files = Array.from(event.target.files ?? []);
     event.target.value = '';
-    if (upErr) {
-      flash('Error al subir foto: ' + upErr.message);
-      setCarPhotoBusyId(null);
-      return;
-    }
-    const newPhotos = [...(car.photos || []), path];
-    const { error: dbErr } = await supabase.from('cars').update({ photos: newPhotos }).eq('id', car.id);
-    setCarPhotoBusyId(null);
-    if (dbErr) flash('Foto subida pero error al guardar: ' + dbErr.message);
-    else {
-      flash('Foto añadida ✓');
+    if (files.length === 0) return;
+    setCarPhotoBusyId(car.id);
+    try {
+      const pending = makePending(files);
+      const paths = await uploadPhotos(`cars/${car.id}`, pending);
+      clearPending(pending);
+      const newPhotos = [...(car.photos || []), ...paths];
+      const { error: dbErr } = await supabase.from('cars').update({ photos: newPhotos }).eq('id', car.id);
+      if (dbErr) throw new Error(dbErr.message);
+      flash(`${paths.length} foto${paths.length > 1 ? 's' : ''} añadida${paths.length > 1 ? 's' : ''} ✓`);
       loadCars();
       setDeployStatus('publishing');
       trackDeploy(Date.now());
+    } catch (err) {
+      flash('Error al subir fotos: ' + (err as Error).message);
+    } finally {
+      setCarPhotoBusyId(null);
     }
   }
 
@@ -395,6 +468,183 @@ export default function AdminApp() {
     if (stErr) console.warn('storage remove', stErr.message);
     flash('Foto quitada ✓');
     loadCars();
+  }
+
+  // ---- Rutas: CRUD ----
+  async function loadRoutes() {
+    if (!supabase) return;
+    const { data, error } = await supabase
+      .from('routes')
+      .select('*')
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: false });
+    if (!error && data) {
+      setRoutes(data as RouteRow[]);
+      setRoutesLoaded(true);
+    } else if (error) {
+      console.warn('[routes] load error', error.message);
+    }
+  }
+
+  function resetRouteForm() {
+    setRouteForm({
+      title: '', description: '', icon: 'pin',
+      price_from: 0, price_to: 0, sort_order: 0, is_active: true,
+    });
+    setEditingRouteId(null);
+    clearPending(pendingRouteFiles);
+    setPendingRouteFiles([]);
+  }
+
+  function startEditRoute(route: RouteRow) {
+    setRouteForm({
+      title: route.title,
+      description: route.description,
+      icon: route.icon,
+      price_from: route.price_from,
+      price_to: route.price_to,
+      sort_order: route.sort_order,
+      is_active: route.is_active,
+    });
+    setEditingRouteId(route.id);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function addPendingRouteFiles(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = '';
+    if (files.length === 0) return;
+    setPendingRouteFiles((prev) => [...prev, ...makePending(files)]);
+  }
+
+  function removePendingRouteFile(index: number) {
+    setPendingRouteFiles((prev) => {
+      clearPending([prev[index]]);
+      return prev.filter((_, i) => i !== index);
+    });
+  }
+
+  async function handleSaveRoute() {
+    if (!supabase) return;
+    const title = routeForm.title.trim();
+    const description = routeForm.description.trim();
+    if (title.length < 2 || title.length > 80) {
+      flash('El título debe tener entre 2 y 80 caracteres.');
+      return;
+    }
+    if (description.length < 2 || description.length > 1000) {
+      flash('La descripción debe tener entre 2 y 1000 caracteres.');
+      return;
+    }
+    setRouteSaving(true);
+    try {
+      const payload = {
+        title,
+        description,
+        icon: routeForm.icon,
+        price_from: Number(routeForm.price_from) || 0,
+        price_to: Number(routeForm.price_to) || 0,
+        sort_order: Number(routeForm.sort_order) || 0,
+        is_active: routeForm.is_active,
+      };
+      let routeId: number;
+      if (editingRouteId) {
+        const { error } = await supabase.from('routes').update(payload).eq('id', editingRouteId);
+        if (error) throw new Error(error.message);
+        routeId = editingRouteId;
+      } else {
+        const { data, error } = await supabase.from('routes').insert(payload).select('id').single();
+        if (error) throw new Error(error.message);
+        routeId = data.id;
+      }
+      if (pendingRouteFiles.length > 0) {
+        const existing = editingRouteId ? routes.find((r) => r.id === routeId)?.photos ?? [] : [];
+        const paths = await uploadPhotos(`rutas/${routeId}`, pendingRouteFiles);
+        const { error: photoErr } = await supabase
+          .from('routes')
+          .update({ photos: [...existing, ...paths] })
+          .eq('id', routeId);
+        if (photoErr) flash(`Ruta guardada pero error al asignar fotos: ${photoErr.message}`);
+      }
+      clearPending(pendingRouteFiles);
+      setPendingRouteFiles([]);
+      flash(editingRouteId ? 'Ruta actualizada ✓' : 'Ruta creada ✓');
+      resetRouteForm();
+      loadRoutes();
+      setDeployStatus('publishing');
+      trackDeploy(Date.now());
+    } catch (err) {
+      flash('Error al guardar ruta: ' + (err as Error).message);
+    } finally {
+      setRouteSaving(false);
+    }
+  }
+
+  async function toggleRouteActive(route: RouteRow) {
+    if (!supabase) return;
+    const { error } = await supabase.from('routes').update({ is_active: !route.is_active }).eq('id', route.id);
+    if (error) flash('Error: ' + error.message);
+    else {
+      flash(route.is_active ? 'Ruta desactivada ✓' : 'Ruta activada ✓');
+      loadRoutes();
+      setDeployStatus('publishing');
+      trackDeploy(Date.now());
+    }
+  }
+
+  async function deleteRoute(route: RouteRow) {
+    if (!supabase) return;
+    if (!window.confirm(`¿Eliminar la ruta "${route.title}"? Esta acción no se puede deshacer.`)) return;
+    if (route.photos && route.photos.length > 0) {
+      await supabase.storage.from('fotos').remove(route.photos);
+    }
+    const { error } = await supabase.from('routes').delete().eq('id', route.id);
+    if (error) flash('Error al eliminar: ' + error.message);
+    else {
+      flash('Ruta eliminada ✓');
+      loadRoutes();
+      setDeployStatus('publishing');
+      trackDeploy(Date.now());
+    }
+  }
+
+  async function handleRoutePhotoUpload(route: RouteRow, event: React.ChangeEvent<HTMLInputElement>) {
+    if (!supabase) return;
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = '';
+    if (files.length === 0) return;
+    setRoutePhotoBusyId(route.id);
+    try {
+      const pending = makePending(files);
+      const paths = await uploadPhotos(`rutas/${route.id}`, pending);
+      clearPending(pending);
+      const newPhotos = [...(route.photos || []), ...paths];
+      const { error: dbErr } = await supabase.from('routes').update({ photos: newPhotos }).eq('id', route.id);
+      if (dbErr) throw new Error(dbErr.message);
+      flash(`${paths.length} foto${paths.length > 1 ? 's' : ''} añadida${paths.length > 1 ? 's' : ''} ✓`);
+      loadRoutes();
+      setDeployStatus('publishing');
+      trackDeploy(Date.now());
+    } catch (err) {
+      flash('Error al subir fotos: ' + (err as Error).message);
+    } finally {
+      setRoutePhotoBusyId(null);
+    }
+  }
+
+  async function removeRoutePhoto(route: RouteRow, photoPath: string) {
+    if (!supabase) return;
+    if (!window.confirm('¿Quitar esta foto de la ruta?')) return;
+    const newPhotos = (route.photos || []).filter((p) => p !== photoPath);
+    const { error: dbErr } = await supabase.from('routes').update({ photos: newPhotos }).eq('id', route.id);
+    if (dbErr) {
+      flash('Error al quitar foto: ' + dbErr.message);
+      return;
+    }
+    const { error: stErr } = await supabase.storage.from('fotos').remove([photoPath]);
+    if (stErr) console.warn('storage remove', stErr.message);
+    flash('Foto quitada ✓');
+    loadRoutes();
   }
 
   const photoUrl = (path: string | null, width: number) =>
@@ -444,6 +694,9 @@ export default function AdminApp() {
           <nav className="admin-tabs">
             <button className={tab === 'contenido' ? 'active' : ''} onClick={() => setTab('contenido')}>
               Contenido
+            </button>
+            <button className={tab === 'rutas' ? 'active' : ''} onClick={() => setTab('rutas')}>
+              Rutas
             </button>
             <button className={tab === 'carros' ? 'active' : ''} onClick={() => setTab('carros')}>
               Carros
@@ -586,67 +839,10 @@ export default function AdminApp() {
 
             <fieldset>
               <legend>Rutas y servicios</legend>
-              {settings.routes.map((route, index) => (
-                <div className="admin-item admin-route" key={index}>
-                  <select
-                    value={route.icon}
-                    onChange={(e) =>
-                      setField('routes', settings.routes.map((r, i) => i === index ? { ...r, icon: e.target.value } : r))
-                    }
-                  >
-                    {ICONS.map((icon) => <option key={icon} value={icon}>{icon}</option>)}
-                  </select>
-                  <input
-                    placeholder="Título"
-                    value={route.title}
-                    onChange={(e) =>
-                      setField('routes', settings.routes.map((r, i) => i === index ? { ...r, title: e.target.value } : r))
-                    }
-                  />
-                  <textarea
-                    placeholder="Descripción"
-                    rows={2}
-                    value={route.description}
-                    onChange={(e) =>
-                      setField('routes', settings.routes.map((r, i) => i === index ? { ...r, description: e.target.value } : r))
-                    }
-                  />
-                  <div className="admin-price-row">
-                    <input
-                      type="number"
-                      min={0}
-                      placeholder="Precio desde"
-                      value={route.priceFrom}
-                      onChange={(e) =>
-                        setField('routes', settings.routes.map((r, i) => i === index ? { ...r, priceFrom: Number(e.target.value) } : r))
-                      }
-                    />
-                    <input
-                      type="number"
-                      min={0}
-                      placeholder="Precio hasta"
-                      value={route.priceTo}
-                      onChange={(e) =>
-                        setField('routes', settings.routes.map((r, i) => i === index ? { ...r, priceTo: Number(e.target.value) } : r))
-                      }
-                    />
-                  </div>
-                  <button type="button" className="admin-remove" onClick={() =>
-                    setField('routes', settings.routes.filter((_, i) => i !== index))
-                  }>
-                    Quitar
-                  </button>
-                </div>
-              ))}
-              <button
-                type="button"
-                className="btn btn-ghost-small"
-                onClick={() =>
-                  setField('routes', [...settings.routes, { icon: 'pin', title: '', description: '', priceFrom: 0, priceTo: 0 }])
-                }
-              >
-                + Añadir ruta
-              </button>
+              <p className="admin-hint" style={{ margin: 0 }}>
+                Las rutas se gestionan ahora en la pestaña <strong>Rutas</strong>, donde puedes
+                crearlas con fotos, precios y orden. Lo que editabas aquí ya no se muestra en la web.
+              </p>
             </fieldset>
 
             <fieldset>
@@ -678,12 +874,186 @@ export default function AdminApp() {
           </section>
         )}
 
+        {tab === 'rutas' && (
+          <section className="admin-panel">
+            <h2>Rutas y servicios</h2>
+            <p className="admin-hint">
+              Crea rutas con sus fotos directamente (se convierten a WebP automáticamente, sin límite
+              de cantidad). Los cambios se publican automáticamente (~2 min). Solo las rutas <em>activas</em> se muestran en la web.
+            </p>
+
+            <fieldset className="admin-car-form">
+              <legend>{editingRouteId ? 'Editar ruta' : 'Nueva ruta'}</legend>
+              <label> Título *
+                <input
+                  placeholder="Ej: Excursión a La Habana"
+                  value={routeForm.title}
+                  onChange={(e) => setRouteForm({ ...routeForm, title: e.target.value })}
+                />
+              </label>
+              <label> Descripción *
+                <textarea
+                  rows={3}
+                  placeholder="Ej: Plaza de la Revolución, Malecón, Habana Vieja, Fábrica de Tabacos y Morro-Cabaña."
+                  value={routeForm.description}
+                  onChange={(e) => setRouteForm({ ...routeForm, description: e.target.value })}
+                />
+              </label>
+              <div className="admin-car-form-row">
+                <label> Icono
+                  <select
+                    value={routeForm.icon}
+                    onChange={(e) => setRouteForm({ ...routeForm, icon: e.target.value })}
+                  >
+                    {ICONS.map((icon) => <option key={icon} value={icon}>{icon}</option>)}
+                  </select>
+                </label>
+                <label> Orden
+                  <input
+                    type="number"
+                    value={routeForm.sort_order}
+                    onChange={(e) => setRouteForm({ ...routeForm, sort_order: Number(e.target.value) })}
+                  />
+                </label>
+                <label className="admin-check">
+                  <input
+                    type="checkbox"
+                    checked={routeForm.is_active}
+                    onChange={(e) => setRouteForm({ ...routeForm, is_active: e.target.checked })}
+                  />
+                  Activa (visible en la web)
+                </label>
+              </div>
+              <div className="admin-price-row">
+                <label> Precio desde (USD/EUR)
+                  <input
+                    type="number"
+                    min={0}
+                    value={routeForm.price_from}
+                    onChange={(e) => setRouteForm({ ...routeForm, price_from: Number(e.target.value) })}
+                  />
+                </label>
+                <label> Precio hasta (USD/EUR)
+                  <input
+                    type="number"
+                    min={0}
+                    value={routeForm.price_to}
+                    onChange={(e) => setRouteForm({ ...routeForm, price_to: Number(e.target.value) })}
+                  />
+                </label>
+              </div>
+              <div className="admin-pending">
+                <label className="btn btn-ghost-small file-label">
+                  + Añadir fotos
+                  <input type="file" accept="image/*" multiple hidden onChange={addPendingRouteFiles} />
+                </label>
+                {pendingRouteFiles.length > 0 && (
+                  <div className="admin-pending-previews">
+                    {pendingRouteFiles.map((pending, index) => (
+                      <div className="admin-pending-thumb" key={`${pending.url}-${index}`}>
+                        <img src={pending.url} alt="" />
+                        <button
+                          type="button"
+                          aria-label="Quitar foto pendiente"
+                          onClick={() => removePendingRouteFile(index)}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="admin-car-form-actions">
+                <button className="btn btn-primary" onClick={handleSaveRoute} disabled={routeSaving}>
+                  {routeSaving
+                    ? 'Guardando…'
+                    : editingRouteId
+                      ? 'Actualizar ruta'
+                      : pendingRouteFiles.length > 0
+                        ? `Crear ruta con ${pendingRouteFiles.length} foto${pendingRouteFiles.length > 1 ? 's' : ''}`
+                        : 'Crear ruta'}
+                </button>
+                {editingRouteId && (
+                  <button type="button" className="btn btn-ghost-small" onClick={resetRouteForm}>
+                    Cancelar edición
+                  </button>
+                )}
+              </div>
+            </fieldset>
+
+            {!routesLoaded ? (
+              <p className="admin-hint">Cargando rutas…</p>
+            ) : routes.length === 0 ? (
+              <p className="admin-hint">Aún no hay rutas. Crea la primera arriba.</p>
+            ) : (
+              <ul className="admin-cars">
+                {routes.map((route) => (
+                  <li key={route.id} className={`admin-car-card ${route.is_active ? 'active' : 'inactive'}`}>
+                    <div className="admin-car-head">
+                      <h3>{route.title}</h3>
+                      <span className={route.is_active ? 'badge badge-ok' : 'badge badge-wait'}>
+                        {route.is_active ? 'Activa' : 'Inactiva'}
+                      </span>
+                      <span className="admin-car-order">Orden: {route.sort_order}</span>
+                    </div>
+                    <p className="admin-car-details">{route.price_from} – {route.price_to} USD/EUR</p>
+                    <p className="admin-car-desc">{route.description}</p>
+
+                    <div className="admin-car-photos">
+                      {route.photos && route.photos.length > 0 ? (
+                        route.photos.map((photo) => (
+                          <div key={photo} className="admin-car-photo">
+                            <img src={photoUrl(photo, 400)} alt={route.title} />
+                            <button className="btn btn-danger-small" onClick={() => removeRoutePhoto(route, photo)}>
+                              Quitar
+                            </button>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="admin-hint">Sin fotos</p>
+                      )}
+                    </div>
+
+                    <div className="admin-car-actions">
+                      <label className="btn btn-ghost-small file-label">
+                        {routePhotoBusyId === route.id ? 'Subiendo…' : '+ Foto'}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          hidden
+                          disabled={routePhotoBusyId === route.id}
+                          onChange={(e) => handleRoutePhotoUpload(route, e)}
+                        />
+                      </label>
+                      <span className="admin-hint" style={{ margin: 0 }}>
+                        {route.photos?.length ?? 0} fotos
+                      </span>
+                      <button className="btn btn-ghost-small" onClick={() => startEditRoute(route)}>
+                        Editar
+                      </button>
+                      <button className="btn btn-ghost-small" onClick={() => toggleRouteActive(route)}>
+                        {route.is_active ? 'Desactivar' : 'Activar'}
+                      </button>
+                      <button className="btn btn-danger-small" onClick={() => deleteRoute(route)}>
+                        Eliminar
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
+
         {tab === 'carros' && (
           <section className="admin-panel">
             <h2>Carros disponibles</h2>
             <p className="admin-hint">
-              Gestiona tu flota: crea, edita, activa/desactiva o elimina carros. Cada carro puede tener hasta 5 fotos.
-              Los cambios se publican automáticamente (~2 min). Solo los carros <em>activos</em> se muestran en la web, debajo de Rutas &amp; precios.
+              Gestiona tu flota: crea, edita, activa/desactiva o elimina carros. Fotos ilimitadas,
+              convertidas a WebP automáticamente. Los cambios se publican automáticamente (~2 min).
+              Solo los carros <em>activos</em> se muestran en la web, debajo de Rutas &amp; precios.
             </p>
 
             <fieldset className="admin-car-form">
@@ -726,6 +1096,43 @@ export default function AdminApp() {
                   />
                   Activo (visible en la web)
                 </label>
+              </div>
+              <div className="admin-pending">
+                <label className="btn btn-ghost-small file-label">
+                  + Añadir fotos
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    hidden
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files ?? []);
+                      e.target.value = '';
+                      if (files.length > 0) setPendingCarFiles((prev) => [...prev, ...makePending(files)]);
+                    }}
+                  />
+                </label>
+                {pendingCarFiles.length > 0 && (
+                  <div className="admin-pending-previews">
+                    {pendingCarFiles.map((pending, index) => (
+                      <div className="admin-pending-thumb" key={`${pending.url}-${index}`}>
+                        <img src={pending.url} alt="" />
+                        <button
+                          type="button"
+                          aria-label="Quitar foto pendiente"
+                          onClick={() =>
+                            setPendingCarFiles((prev) => {
+                              clearPending([prev[index]]);
+                              return prev.filter((_, i) => i !== index);
+                            })
+                          }
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="admin-car-form-actions">
                 <button className="btn btn-primary" onClick={handleSaveCar} disabled={carSaving}>
@@ -778,13 +1185,14 @@ export default function AdminApp() {
                         <input
                           type="file"
                           accept="image/*"
+                          multiple
                           hidden
                           disabled={carPhotoBusyId === car.id}
                           onChange={(e) => handleCarPhotoUpload(car, e)}
                         />
                       </label>
                       <span className="admin-hint" style={{ margin: 0 }}>
-                        {car.photos?.length ?? 0}/5
+                        {car.photos?.length ?? 0} fotos
                       </span>
                       <button className="btn btn-ghost-small" onClick={() => startEditCar(car)}>
                         Editar
@@ -856,8 +1264,8 @@ export default function AdminApp() {
 
             <div className="admin-upload">
               <label className="btn btn-primary file-label">
-                {uploadBusy ? 'Subiendo…' : 'Subir foto'}
-                <input type="file" accept="image/*" onChange={handleUpload} disabled={uploadBusy} hidden />
+                {uploadBusy ? 'Subiendo…' : 'Subir fotos'}
+                <input type="file" accept="image/*" multiple onChange={handleUpload} disabled={uploadBusy} hidden />
               </label>
             </div>
 
