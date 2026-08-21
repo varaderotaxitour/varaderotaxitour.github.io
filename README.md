@@ -73,10 +73,9 @@ public/
 
 ## Despliegue
 
-GitHub Pages + GitHub Actions (`.github/workflows/deploy.yml`). Las variables
-`PUBLIC_SUPABASE_URL` y `PUBLIC_SUPABASE_ANON_KEY` están configuradas en las
-variables del repo. El workflow además copia `dist/admin/index.html` a
-`dist/404.html` para que las sub-rutas del admin no den 404.
+El sitio está desplegado en **Vercel**. Cada `git push` a la rama `main` compila y publica el sitio automáticamente. 
+Las variables de entorno `PUBLIC_SUPABASE_URL` y `PUBLIC_SUPABASE_ANON_KEY` están configuradas en el panel de Vercel. 
+Además, el sistema cuenta con un **Deploy Hook** conectado a una Supabase Edge Function: cada vez que guardas cambios en el panel de administración, Supabase notifica a Vercel para que regenere el sitio web en segundos.
 
 ## Paleta e identidad
 
