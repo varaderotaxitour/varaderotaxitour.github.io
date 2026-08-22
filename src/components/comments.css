@@ -90,12 +90,25 @@
   color: var(--ink-soft);
   font-size: 0.92rem;
   line-height: 1.5;
-  display: -webkit-box;
-  -webkit-line-clamp: 7;
-  line-clamp: 7;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
   hyphens: auto;
+
+  /* Comentarios largos: scroll interno dentro de la tarjeta */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  padding-right: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(12, 102, 114, 0.35) transparent;
+}
+
+.comment-message::-webkit-scrollbar {
+  width: 4px;
+}
+
+.comment-message::-webkit-scrollbar-thumb {
+  background: rgba(12, 102, 114, 0.3);
+  border-radius: 999px;
 }
 
 @media (max-width: 640px) {
@@ -106,8 +119,6 @@
   }
   .comment-message {
     font-size: 0.85rem;
-    -webkit-line-clamp: 6;
-    line-clamp: 6;
   }
 }
 
