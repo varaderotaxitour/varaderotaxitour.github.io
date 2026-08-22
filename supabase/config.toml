@@ -1,0 +1,13 @@
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[functions.redeploy]
+enabled = true
+verify_jwt = true
+import_map = "./functions/redeploy/import_map.json"
+entrypoint = "./functions/redeploy/index.ts"
+

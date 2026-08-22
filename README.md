@@ -35,9 +35,8 @@ usuario de administración; cualquiera con una cuenta podría editar contenido.
 ### Importante
 
 - El sitio es **estático**: el contenido se descarga de Supabase durante el
-  build (`pnpm build`). Al guardar cambios en el panel, **se publica automáticamente en Vercel**
-  gracias al Deploy Hook configurado con Supabase. Si Supabase no responde, la página usa el contenido
-  de respaldo definido en `src/pages/index.astro` (fallback).
+  build (`pnpm build`). Al guardar en el panel, el contenido queda en la BD; pulsa **“🔄 Actualizar página”** (arriba en el panel) para publicar en Vercel (~2 min). Si Supabase no responde, la página usa el contenido
+  de respaldo definido en `src/lib/content.ts` (fallback).
 - Los **comentarios** de los visitantes se guardan en tiempo real: quien
   escribe solo ve su comentario tras ser **aprobado** en el panel.
 
@@ -75,7 +74,7 @@ public/
 
 El sitio está desplegado en **Vercel**. Cada `git push` a la rama `main` compila y publica el sitio automáticamente. 
 Las variables de entorno `PUBLIC_SUPABASE_URL` y `PUBLIC_SUPABASE_ANON_KEY` están configuradas en el panel de Vercel. 
-Además, el sistema cuenta con un **Deploy Hook** conectado a una Supabase Edge Function: cada vez que guardas cambios en el panel de administración, Supabase notifica a Vercel para que regenere el sitio web en segundos.
+La publicación es **manual**: tras guardar en `/admin`, pulsa **“Actualizar página”** que invoca la Edge Function `redeploy` (`supabase/functions/redeploy`) y dispara el Vercel Deploy Hook (`VERCEL_DEPLOY_HOOK_URL`). Ver `supabase/migrations/0011_remove_auto_redeploy.sql`.
 
 ## Paleta e identidad
 

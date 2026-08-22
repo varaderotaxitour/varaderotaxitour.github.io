@@ -368,31 +368,29 @@ export default function AdminApp() {
     } else {
       flash(
         contentLang === 'es'
-          ? 'Contenido guardado ✓'
-          : `Traducción (${localeNames[contentLang]}) guardada ✓`
+          ? 'Contenido guardado en BD ✓ — pulsa “Actualizar página” para publicarlo'
+          : `Traducción (${localeNames[contentLang]}) guardada en BD ✓ — pulsa “Actualizar página”`
       );
-      setDeployStatus('publishing');
-      trackDeploy(Date.now());
     }
   }
 
-  async function trackDeploy(_since?: number) {
+  async function handleManualDeploy() {
     if (!supabase) return;
+    setDeployStatus('publishing');
+    setDeployError('');
     try {
       const { data, error } = await supabase.functions.invoke('redeploy');
       if (error) throw error;
       if (!(data as { ok?: boolean } | null)?.ok) {
-        throw new Error('respuesta inesperada de la función de publicación');
+        throw new Error((data as { error?: string })?.error ?? 'respuesta inesperada de la función de publicación');
       }
-      setDeployError('');
-      setDeployStatus('publishing');
+      // Hook disparado correctamente — Vercel tarda ~60-120s
+      flash('Publicación iniciada ✓ — Vercel está desplegando (~2 min)');
       window.setTimeout(() => {
-        setDeployStatus((current) =>
-          current === 'publishing' ? 'published' : current
-        );
-      }, 150000);
+        setDeployStatus((current) => (current === 'publishing' ? 'published' : current));
+      }, 120000);
     } catch (err) {
-      console.warn('[redeploy] fallo al iniciar la publicación:', err);
+      console.warn('[redeploy] fallo al publicar:', err);
       setDeployError(err instanceof Error ? err.message : String(err));
       setDeployStatus('failed');
     }
@@ -507,7 +505,7 @@ export default function AdminApp() {
       .update({ [field]: path, updated_at: new Date().toISOString() })
       .eq('id', 1);
     setField(field, path);
-    flash('Foto asignada ✓ El sitio se publicará automáticamente.');
+    flash('Foto asignada en BD ✓ — pulsa “Actualizar página” para publicarla');
   }
 
   async function deleteUpload(upload: UploadRow) {
@@ -599,11 +597,9 @@ export default function AdminApp() {
       }
       clearPending(pendingCarFiles);
       setPendingCarFiles([]);
-      flash(editingCarId ? 'Carro actualizado ✓' : 'Carro creado ✓');
+      flash(editingCarId ? 'Carro actualizado en BD ✓ — pulsa “Actualizar página”' : 'Carro creado en BD ✓ — pulsa “Actualizar página”');
       resetCarForm();
       loadCars();
-      setDeployStatus('publishing');
-      trackDeploy(Date.now());
     } catch (err) {
       flash('Error al guardar carro: ' + (err as Error).message);
     } finally {
@@ -616,10 +612,8 @@ export default function AdminApp() {
     const { error } = await supabase.from('cars').update({ is_active: !car.is_active }).eq('id', car.id);
     if (error) flash('Error: ' + error.message);
     else {
-      flash(car.is_active ? 'Carro desactivado ✓' : 'Carro activado ✓');
+      flash(car.is_active ? 'Carro desactivado en BD ✓ — pulsa “Actualizar página”' : 'Carro activado en BD ✓ — pulsa “Actualizar página”');
       loadCars();
-      setDeployStatus('publishing');
-      trackDeploy(Date.now());
     }
   }
 
@@ -633,14 +627,12 @@ export default function AdminApp() {
     }
     if (car.photos && car.photos.length > 0) {
       const { error: stErr } = await supabase.storage.from('fotos').remove(car.photos);
-      if (stErr) flash(`Carro eliminado pero ${stErr.message} al borrar fotos.`);
-      else flash('Carro y sus fotos borrados ✓');
+      if (stErr) flash(`Carro eliminado pero ${stErr.message} al borrar fotos. — pulsa “Actualizar página”`);
+      else flash('Carro y sus fotos borrados en BD ✓ — pulsa “Actualizar página”');
     } else {
-      flash('Carro eliminado ✓');
+      flash('Carro eliminado en BD ✓ — pulsa “Actualizar página”');
     }
     loadCars();
-    setDeployStatus('publishing');
-    trackDeploy(Date.now());
   }
 
   async function handleCarPhotoUpload(car: CarRow, event: React.ChangeEvent<HTMLInputElement>) {
@@ -662,10 +654,8 @@ export default function AdminApp() {
       const newPhotos = [...(car.photos || []), ...paths];
       const { error: dbErr } = await supabase.from('cars').update({ photos: newPhotos }).eq('id', car.id);
       if (dbErr) throw new Error(dbErr.message);
-      flash(`${paths.length} foto${paths.length > 1 ? 's' : ''} añadida${paths.length > 1 ? 's' : ''} ✓`);
+      flash(`${paths.length} foto${paths.length > 1 ? 's' : ''} añadida${paths.length > 1 ? 's' : ''} en BD ✓ — pulsa “Actualizar página”`);
       loadCars();
-      setDeployStatus('publishing');
-      trackDeploy(Date.now());
     } catch (err) {
       flash('Error al subir fotos: ' + (err as Error).message);
     } finally {
@@ -685,9 +675,9 @@ export default function AdminApp() {
     const { error: stErr } = await supabase.storage.from('fotos').remove([photoPath]);
     if (stErr) {
       console.warn('storage remove', stErr.message);
-      flash('Foto quitada de la ficha pero no se pudo borrar del almacenamiento: ' + stErr.message);
+      flash('Foto quitada de la ficha pero no se pudo borrar del almacenamiento: ' + stErr.message + ' — pulsa “Actualizar página”');
     } else {
-      flash('Foto borrada definitivamente ✓');
+      flash('Foto borrada definitivamente en BD ✓ — pulsa “Actualizar página”');
     }
     loadCars();
   }
@@ -804,11 +794,9 @@ export default function AdminApp() {
       }
       clearPending(pendingRouteFiles);
       setPendingRouteFiles([]);
-      flash(editingRouteId ? 'Ruta actualizada ✓' : 'Ruta creada ✓');
+      flash(editingRouteId ? 'Ruta actualizada en BD ✓ — pulsa “Actualizar página”' : 'Ruta creada en BD ✓ — pulsa “Actualizar página”');
       resetRouteForm();
       loadRoutes();
-      setDeployStatus('publishing');
-      trackDeploy(Date.now());
     } catch (err) {
       flash('Error al guardar ruta: ' + (err as Error).message);
     } finally {
@@ -821,10 +809,8 @@ export default function AdminApp() {
     const { error } = await supabase.from('routes').update({ is_active: !route.is_active }).eq('id', route.id);
     if (error) flash('Error: ' + error.message);
     else {
-      flash(route.is_active ? 'Ruta desactivada ✓' : 'Ruta activada ✓');
+      flash(route.is_active ? 'Ruta desactivada en BD ✓ — pulsa “Actualizar página”' : 'Ruta activada en BD ✓ — pulsa “Actualizar página”');
       loadRoutes();
-      setDeployStatus('publishing');
-      trackDeploy(Date.now());
     }
   }
 
@@ -838,14 +824,12 @@ export default function AdminApp() {
     }
     if (route.photos && route.photos.length > 0) {
       const { error: stErr } = await supabase.storage.from('fotos').remove(route.photos);
-      if (stErr) flash(`Ruta eliminada pero error al borrar fotos: ${stErr.message}`);
-      else flash('Ruta y sus fotos borradas ✓');
+      if (stErr) flash(`Ruta eliminada pero error al borrar fotos: ${stErr.message} — pulsa “Actualizar página”`);
+      else flash('Ruta y sus fotos borradas en BD ✓ — pulsa “Actualizar página”');
     } else {
-      flash('Ruta eliminada ✓');
+      flash('Ruta eliminada en BD ✓ — pulsa “Actualizar página”');
     }
     loadRoutes();
-    setDeployStatus('publishing');
-    trackDeploy(Date.now());
   }
 
   async function handleRoutePhotoUpload(route: RouteRow, event: React.ChangeEvent<HTMLInputElement>) {
@@ -867,10 +851,8 @@ export default function AdminApp() {
       const newPhotos = [...(route.photos || []), ...paths];
       const { error: dbErr } = await supabase.from('routes').update({ photos: newPhotos }).eq('id', route.id);
       if (dbErr) throw new Error(dbErr.message);
-      flash(`${paths.length} foto${paths.length > 1 ? 's' : ''} añadida${paths.length > 1 ? 's' : ''} ✓`);
+      flash(`${paths.length} foto${paths.length > 1 ? 's' : ''} añadida${paths.length > 1 ? 's' : ''} en BD ✓ — pulsa “Actualizar página”`);
       loadRoutes();
-      setDeployStatus('publishing');
-      trackDeploy(Date.now());
     } catch (err) {
       flash('Error al subir fotos: ' + (err as Error).message);
     } finally {
@@ -890,9 +872,9 @@ export default function AdminApp() {
     const { error: stErr } = await supabase.storage.from('fotos').remove([photoPath]);
     if (stErr) {
       console.warn('storage remove', stErr.message);
-      flash('Foto quitada de la ficha pero no del almacenamiento: ' + stErr.message);
+      flash('Foto quitada de la ficha pero no del almacenamiento: ' + stErr.message + ' — pulsa “Actualizar página”');
     } else {
-      flash('Foto borrada definitivamente ✓');
+      flash('Foto borrada definitivamente en BD ✓ — pulsa “Actualizar página”');
     }
     loadRoutes();
   }
@@ -960,6 +942,14 @@ export default function AdminApp() {
               Fotos
             </button>
           </nav>
+          <button
+            className="btn btn-primary admin-deploy-btn"
+            onClick={handleManualDeploy}
+            disabled={deployStatus === 'publishing'}
+            title="Publica los cambios guardados en la web"
+          >
+            {deployStatus === 'publishing' ? 'Publicando…' : '🔄 Actualizar página'}
+          </button>
           <button className="admin-logout" onClick={handleLogout}>
             Salir
           </button>
@@ -971,20 +961,17 @@ export default function AdminApp() {
 
         {deployStatus === 'publishing' && (
           <p className="admin-notice">
-            Guardado ✓ — Vercel está publicando los cambios (~2 minutos)…
+            ⏳ Publicando en Vercel… tarda ~60-120s. No cierres esta pestaña.
           </p>
         )}
         {deployStatus === 'published' && (
           <p className="admin-notice admin-notice-ok">
-            Publicación terminada ✓ Recarga el sitio para ver los cambios. Si no aparecen,
-            revisa el dashboard de Vercel.
+            ✅ Publicación lanzada ✓ En 1-2 min recarga <a href="/" target="_blank" rel="noopener">la web</a> (haz hard refresh Ctrl+F5 si no ves cambios).
           </p>
         )}
         {deployStatus === 'failed' && (
           <p className="admin-notice admin-notice-error">
-            ⚠️ El contenido se guardó en la base de datos, pero falló la publicación
-            automática ({deployError || 'error desconocido'}). Tus cambios se publicarán en el
-            próximo guardado; si persiste, revisa el dashboard de Vercel.
+            ⚠️ Falló la publicación ({deployError || 'error desconocido'}). Los cambios siguen en la BD — pulsa de nuevo “Actualizar página”. Si persiste, revisa Vercel Dashboard → Deployments y Supabase → Functions → redeploy Logs. <button className="btn btn-ghost-small" onClick={handleManualDeploy}>Reintentar</button>
           </p>
         )}
 
@@ -992,8 +979,7 @@ export default function AdminApp() {
           <section className="admin-panel">
             <h2>Contenido del sitio</h2>
             <p className="admin-hint">
-              Al guardar, el sitio se publica automáticamente en unos 2 minutos.
-              Los comentarios se moderan al instante.
+              Al guardar se almacena en la BD. Pulsa <strong>“Actualizar página”</strong> (arriba) para publicar en la web (~2 min). Los comentarios se moderan al instante.
             </p>
 
             <div className="admin-langs">
@@ -1238,7 +1224,7 @@ export default function AdminApp() {
             <h2>Rutas y servicios</h2>
             <p className="admin-hint">
               Crea rutas con sus fotos directamente (se convierten a WebP automáticamente, sin límite
-              de cantidad). Los cambios se publican automáticamente (~2 min). Solo las rutas <em>activas</em> se muestran en la web.
+              de cantidad). Al guardar pulsa <strong>“Actualizar página”</strong> para publicarlo. Solo las rutas <em>activas</em> se muestran en la web.
             </p>
 
             <fieldset className="admin-car-form">
@@ -1420,10 +1406,8 @@ export default function AdminApp() {
                         esValues={{ title: route.title, description: route.description }}
                         translations={route.translations}
                         onSaved={() => {
-                          flash('Traducciones de la ruta guardadas ✓');
+                          flash('Traducciones de la ruta guardadas en BD ✓ — pulsa “Actualizar página”');
                           loadRoutes();
-                          setDeployStatus('publishing');
-                          trackDeploy(Date.now());
                         }}
                       />
                     )}
@@ -1439,7 +1423,7 @@ export default function AdminApp() {
             <h2>Carros disponibles</h2>
             <p className="admin-hint">
               Gestiona tu flota: crea, edita, activa/desactiva o elimina carros. Fotos ilimitadas,
-              convertidas a WebP automáticamente. Los cambios se publican automáticamente (~2 min).
+              convertidas a WebP automáticamente. Al guardar pulsa <strong>“Actualizar página”</strong> para publicarlo.
               Solo los carros <em>activos</em> se muestran en la web, debajo de Rutas &amp; precios.
             </p>
 
@@ -1625,10 +1609,8 @@ export default function AdminApp() {
                         }}
                         translations={car.translations}
                         onSaved={() => {
-                          flash('Traducciones del carro guardadas ✓');
+                          flash('Traducciones del carro guardadas en BD ✓ — pulsa “Actualizar página”');
                           loadCars();
-                          setDeployStatus('publishing');
-                          trackDeploy(Date.now());
                         }}
                       />
                     )}
