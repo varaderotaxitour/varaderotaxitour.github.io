@@ -220,6 +220,7 @@ export default function AdminApp() {
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deployStatus, setDeployStatus] = useState<'idle' | 'publishing' | 'published' | 'failed'>('idle');
+  const [deployError, setDeployError] = useState('');
 
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [uploads, setUploads] = useState<UploadRow[]>([]);
@@ -374,11 +375,26 @@ export default function AdminApp() {
     }
   }
 
-  function trackDeploy(_since: number) {
-    setDeployStatus('publishing');
-    window.setTimeout(() => {
-      setDeployStatus('published');
-    }, 40000);
+  async function trackDeploy(_since?: number) {
+    if (!supabase) return;
+    try {
+      const { data, error } = await supabase.functions.invoke('redeploy');
+      if (error) throw error;
+      if (!(data as { ok?: boolean } | null)?.ok) {
+        throw new Error('respuesta inesperada de la función de publicación');
+      }
+      setDeployError('');
+      setDeployStatus('publishing');
+      window.setTimeout(() => {
+        setDeployStatus((current) =>
+          current === 'publishing' ? 'published' : current
+        );
+      }, 150000);
+    } catch (err) {
+      console.warn('[redeploy] fallo al iniciar la publicación:', err);
+      setDeployError(err instanceof Error ? err.message : String(err));
+      setDeployStatus('failed');
+    }
   }
 
   // ---- Comments ----
@@ -889,14 +905,21 @@ export default function AdminApp() {
         {notice && <p className="admin-notice">{notice}</p>}
 
         {deployStatus === 'publishing' && (
-          <p className="admin-notice">Guardado ✓ — publicando el sitio (~2 minutos)…</p>
+          <p className="admin-notice">
+            Guardado ✓ — Vercel está publicando los cambios (~2 minutos)…
+          </p>
         )}
         {deployStatus === 'published' && (
-          <p className="admin-notice admin-notice-ok">Sitio publicado ✓ Ya puedes ver los cambios.</p>
+          <p className="admin-notice admin-notice-ok">
+            Publicación terminada ✓ Recarga el sitio para ver los cambios. Si no aparecen,
+            revisa el dashboard de Vercel.
+          </p>
         )}
         {deployStatus === 'failed' && (
           <p className="admin-notice admin-notice-error">
-            No se pudo publicar automáticamente. Revisa las Actions de GitHub.
+            ⚠️ El contenido se guardó en la base de datos, pero falló la publicación
+            automática ({deployError || 'error desconocido'}). Tus cambios se publicarán en el
+            próximo guardado; si persiste, revisa el dashboard de Vercel.
           </p>
         )}
 
