@@ -1,0 +1,49 @@
+---
+interface Props {
+  path: string;
+  alt: string;
+  widths: number[];
+  sizes?: string;
+  quality?: number;
+  loading?: 'lazy' | 'eager';
+  fetchpriority?: 'high' | 'low' | 'auto';
+  class?: string;
+}
+
+const {
+  path,
+  alt,
+  widths,
+  sizes,
+  quality = 75,
+  loading = 'lazy',
+  fetchpriority,
+  class: className,
+} = Astro.props;
+
+const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL as string | undefined;
+const base = supabaseUrl
+  ? `${supabaseUrl}/storage/v1/render/image/public/fotos/`
+  : '/';
+
+const sorted = [...new Set(widths)].sort((a, b) => a - b);
+const largest = sorted[sorted.length - 1];
+const params = (w: number) => `width=${w}&quality=${quality}&format=webp`;
+
+const srcset =
+  sorted.length > 1
+    ? sorted.map((w) => `${base}${path}?${params(w)} ${w}w`).join(', ')
+    : undefined;
+const src = `${base}${path}?${params(largest)}`;
+---
+
+<img
+  src={src}
+  srcset={srcset}
+  sizes={sizes}
+  alt={alt}
+  loading={loading}
+  decoding="async"
+  fetchpriority={fetchpriority}
+  class={className}
+/>

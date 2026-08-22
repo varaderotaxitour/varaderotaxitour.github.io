@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { getUi, type UiStrings } from '../i18n/ui';
 import './lightbox.css';
 
 const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL as string;
 const storageBase = supabaseUrl
-  ? `${supabaseUrl}/storage/v1/object/public/fotos/`
+  ? `${supabaseUrl}/storage/v1/render/image/public/fotos/`
   : '/';
 
 type LightboxState = {
@@ -12,7 +13,21 @@ type LightboxState = {
   index: number;
 } | null;
 
-export default function RouteLightbox() {
+type Props = {
+  strings?: Pick<
+    UiStrings,
+    'lbPhotosOfTitle' | 'lbGallery' | 'lbClose' | 'lbPrevPhoto' | 'lbNextPhoto'
+  >;
+};
+
+export default function RouteLightbox({ strings }: Props) {
+  const t = {
+    lbPhotosOfTitle: strings?.lbPhotosOfTitle ?? getUi('es').lbPhotosOfTitle,
+    lbGallery: strings?.lbGallery ?? getUi('es').lbGallery,
+    lbClose: strings?.lbClose ?? getUi('es').lbClose,
+    lbPrevPhoto: strings?.lbPrevPhoto ?? getUi('es').lbPrevPhoto,
+    lbNextPhoto: strings?.lbNextPhoto ?? getUi('es').lbNextPhoto,
+  };
   const [state, setState] = useState<LightboxState>(null);
   const touchStartX = useRef(0);
   const touchDeltaX = useRef(0);
@@ -66,7 +81,11 @@ export default function RouteLightbox() {
       className="lightbox-overlay"
       role="dialog"
       aria-modal="true"
-      aria-label={state.title ? `Fotos de ${state.title}` : 'Galería de fotos'}
+      aria-label={
+        state.title
+          ? t.lbPhotosOfTitle.replace('{title}', state.title)
+          : t.lbGallery
+      }
       onClick={(event) => {
         if (event.target === event.currentTarget) close();
       }}
@@ -81,7 +100,7 @@ export default function RouteLightbox() {
         if (Math.abs(touchDeltaX.current) > 40) step(touchDeltaX.current < 0 ? 1 : -1);
       }}
     >
-      <button className="lightbox-close" type="button" aria-label="Cerrar" onClick={close}>
+      <button className="lightbox-close" type="button" aria-label={t.lbClose} onClick={close}>
         ×
       </button>
 
@@ -90,7 +109,7 @@ export default function RouteLightbox() {
           <button
             className="lightbox-arrow lightbox-prev"
             type="button"
-            aria-label="Foto anterior"
+            aria-label={t.lbPrevPhoto}
             onClick={() => step(-1)}
           >
             ‹
@@ -98,7 +117,7 @@ export default function RouteLightbox() {
           <button
             className="lightbox-arrow lightbox-next"
             type="button"
-            aria-label="Foto siguiente"
+            aria-label={t.lbNextPhoto}
             onClick={() => step(1)}
           >
             ›

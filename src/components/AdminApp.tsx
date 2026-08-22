@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createClient, type Session } from '@supabase/supabase-js';
+import { locales, localeNames, type Locale } from '../i18n/ui';
 import { toWebp, toWebpAll } from './webp';
 import './admin.css';
 
@@ -44,6 +45,7 @@ type Settings = {
   cta_lead: string;
   footer_tagline: string;
   footer_copyright: string;
+  translations?: Record<string, Record<string, unknown>> | null;
 };
 
 type CommentRow = {
@@ -66,6 +68,7 @@ type CarRow = {
   sort_order: number;
   created_at: string;
   updated_at: string;
+  translations?: Record<string, Record<string, unknown>> | null;
 };
 
 type RouteRow = {
@@ -80,6 +83,7 @@ type RouteRow = {
   sort_order: number;
   created_at: string;
   updated_at: string;
+  translations?: Record<string, Record<string, unknown>> | null;
 };
 
 type PendingPhoto = { file: File; url: string };
@@ -93,6 +97,116 @@ const emptySettings: Settings = {
 };
 
 const input = (value: string | null | undefined) => value ?? '';
+
+type TrFieldDef = { key: string; textarea?: boolean };
+
+function RowTranslations({
+  table,
+  rowId,
+  fields,
+  esValues,
+  translations,
+  onSaved,
+}: {
+  table: 'routes' | 'cars';
+  rowId: number;
+  fields: TrFieldDef[];
+  esValues: Record<string, string>;
+  translations?: Record<string, Record<string, unknown>> | null;
+  onSaved: () => void;
+}) {
+  const [draft, setDraft] = useState<Record<string, Record<string, string>>>(() => {
+    const init: Record<string, Record<string, string>> = {};
+    (locales as readonly Locale[]).forEach((loc) => {
+      init[loc] = {};
+      for (const f of fields) {
+        init[loc][f.key] = String(
+          (translations?.[loc]?.[f.key] as string | undefined) ?? ''
+        );
+      }
+    });
+    return init;
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  function updateField(loc: Locale, key: string, value: string) {
+    setDraft((prev) => ({
+      ...prev,
+      [loc]: { ...(prev[loc] ?? {}), [key]: value },
+    }));
+  }
+
+  async function save() {
+    if (!supabase) return;
+    setSaving(true);
+    setError('');
+    try {
+      const merged: Record<string, Record<string, string>> = {};
+      (locales as readonly Locale[]).forEach((loc) => {
+        const next: Record<string, string> = {};
+        const existing = translations?.[loc] ?? {};
+        Object.keys(existing).forEach((k) => {
+          const v = existing[k];
+          if (typeof v === 'string' && v.trim() !== '') next[k] = v;
+        });
+        for (const f of fields) {
+          const val = (draft[loc]?.[f.key] ?? '').trim();
+          if (val !== '') next[f.key] = val;
+          else delete next[f.key];
+        }
+        if (Object.keys(next).length > 0) merged[loc] = next;
+      });
+      const { error } = await supabase!
+        .from(table)
+        .update({ translations: merged })
+        .eq('id', rowId);
+      if (error) throw new Error(error.message);
+      onSaved();
+    } catch (err) {
+      setError('Error al guardar traducciones: ' + (err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="row-translations">
+      <p className="admin-hint" style={{ margin: '0 0 8px' }}>
+        Deja un campo vacío para usar el texto en español.
+      </p>
+      {(locales as readonly Locale[]).map((loc) =>
+        loc === 'es' ? null : (
+          <div className="tr-lang" key={loc}>
+            <strong>{localeNames[loc]}</strong>
+            {fields.map((f) =>
+              f.textarea ? (
+                <textarea
+                  key={f.key}
+                  rows={2}
+                  placeholder={esValues[f.key] ?? ''}
+                  value={draft[loc]?.[f.key] ?? ''}
+                  onChange={(e) => updateField(loc, f.key, e.target.value)}
+                />
+              ) : (
+                <input
+                  key={f.key}
+                  placeholder={esValues[f.key] ?? ''}
+                  value={draft[loc]?.[f.key] ?? ''}
+                  onChange={(e) => updateField(loc, f.key, e.target.value)}
+                />
+              )
+            )}
+          </div>
+        )
+      )}
+      {error && <p className="admin-error">{error}</p>}
+      <button className="btn btn-primary" onClick={save} disabled={saving}>
+        {saving ? 'Guardando…' : 'Guardar traducciones'}
+      </button>
+    </div>
+  );
+}
 
 export default function AdminApp() {
   const [session, setSession] = useState<Session | null>(null);
@@ -133,6 +247,11 @@ export default function AdminApp() {
   const [routePhotoBusyId, setRoutePhotoBusyId] = useState<number | null>(null);
   const [pendingRouteFiles, setPendingRouteFiles] = useState<PendingPhoto[]>([]);
 
+  // ---- Idiomas ----
+  const [contentLang, setContentLang] = useState<Locale>('es');
+  const [tr, setTr] = useState<Record<string, Record<string, unknown>>>({});
+  const [expandedTrId, setExpandedTrId] = useState<string | null>(null);
+
   useEffect(() => {
     if (!supabase) return;
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -150,7 +269,11 @@ export default function AdminApp() {
         .select('*')
         .single()
         .then(({ data }) => {
-          if (data) setSettings({ ...emptySettings, ...(data as Settings) });
+          if (data) {
+            const row = data as Settings & { translations?: Record<string, Record<string, unknown>> };
+            setSettings({ ...emptySettings, ...row });
+            setTr(row.translations ?? {});
+          }
           setSettingsLoaded(true);
         });
       loadComments();
@@ -189,17 +312,63 @@ export default function AdminApp() {
     setSettings((prev) => ({ ...prev, [key]: value }));
   }
 
+  // ---- Helpers de idiomas (contenido) ----
+  function getTrValue(field: string): string {
+    if (contentLang === 'es') return input(settings[field as keyof Settings] as string | undefined);
+    return String((tr[contentLang]?.[field] as string | undefined) ?? '');
+  }
+
+  function setTrValue(field: string, value: string) {
+    if (contentLang === 'es') {
+      setField(field as keyof Settings, value as never);
+      return;
+    }
+    setTr((prev) => ({
+      ...prev,
+      [contentLang]: { ...(prev[contentLang] ?? {}), [field]: value },
+    }));
+  }
+
+  function getTrustItemsDraft(): TrustItem[] {
+    if (contentLang === 'es') return settings.trust_items;
+    const arr = tr[contentLang]?.trust_items;
+    if (Array.isArray(arr)) return arr as TrustItem[];
+    return settings.trust_items.map(() => ({ icon: '', title: '', text: '' }));
+  }
+
+  function setTrustItemsDraft(items: TrustItem[]) {
+    if (contentLang === 'es') {
+      setField('trust_items', items);
+      return;
+    }
+    setTr((prev) => ({
+      ...prev,
+      [contentLang]: { ...(prev[contentLang] ?? {}), trust_items: items },
+    }));
+  }
+
   async function saveSettings() {
     if (!supabase) return;
     setSaving(true);
+    const { translations: _ignored, ...esFields } = settings;
+    const payload = {
+      ...esFields,
+      translations: tr,
+      updated_at: new Date().toISOString(),
+    };
     const { error } = await supabase
       .from('settings')
-      .update({ ...settings, updated_at: new Date().toISOString() })
+      .update(payload)
       .eq('id', 1);
     setSaving(false);
     if (error) {
       flash('Error al guardar: ' + error.message);
     } else {
+      flash(
+        contentLang === 'es'
+          ? 'Contenido guardado ✓'
+          : `Traducción (${localeNames[contentLang]}) guardada ✓`
+      );
       setDeployStatus('publishing');
       trackDeploy(Date.now());
     }
@@ -648,7 +817,9 @@ export default function AdminApp() {
   }
 
   const photoUrl = (path: string | null, width: number) =>
-    path ? `${supabaseUrl}/storage/v1/object/public/fotos/${path}?width=${width}` : '';
+    path
+      ? `${supabaseUrl}/storage/v1/render/image/public/fotos/${path}?width=${width}&quality=75&format=webp`
+      : '';
 
   if (!session) {
     return (
@@ -737,45 +908,106 @@ export default function AdminApp() {
               Los comentarios se moderan al instante.
             </p>
 
+            <div className="admin-langs">
+              <span>Idioma:</span>
+              {locales.map((loc) => (
+                <button
+                  key={loc}
+                  type="button"
+                  className={`lang-btn ${contentLang === loc ? 'active' : ''}`}
+                  onClick={() => setContentLang(loc)}
+                >
+                  {loc.toUpperCase()}
+                </button>
+              ))}
+            </div>
+            <p className="admin-hint">
+              {contentLang === 'es' ? (
+                <>Estás editando el contenido principal en español (fuente para todos los idiomas).</>
+              ) : (
+                <>
+                  Editando <strong>{localeNames[contentLang]}</strong>. Si dejas un campo vacío,
+                  la web usará el texto en español como respaldo. WhatsApp, teléfono e Instagram se
+                  comparten en todos los idiomas.
+                </>
+              )}
+            </p>
+
             <fieldset>
               <legend>SEO</legend>
               <label> Título SEO
-                <input value={input(settings.seo_title)} onChange={(e) => setField('seo_title', e.target.value)} />
+                <input
+                  value={getTrValue('seo_title')}
+                  placeholder={settings.seo_title}
+                  onChange={(e) => setTrValue('seo_title', e.target.value)}
+                />
               </label>
               <label> Descripción SEO
-                <textarea rows={2} value={input(settings.seo_description)} onChange={(e) => setField('seo_description', e.target.value)} />
+                <textarea
+                  rows={2}
+                  value={getTrValue('seo_description')}
+                  placeholder={settings.seo_description}
+                  onChange={(e) => setTrValue('seo_description', e.target.value)}
+                />
               </label>
             </fieldset>
 
+            {contentLang === 'es' && (
+              <fieldset>
+                <legend>Contacto</legend>
+                <label> WhatsApp (solo dígitos, con código de país)
+                  <input value={input(settings.whatsapp_number)} onChange={(e) => setField('whatsapp_number', e.target.value)} />
+                </label>
+                <label> Teléfono mostrado en pantalla
+                  <input value={input(settings.phone_display)} onChange={(e) => setField('phone_display', e.target.value)} />
+                </label>
+                <label> URL de Instagram
+                  <input value={input(settings.instagram_url)} onChange={(e) => setField('instagram_url', e.target.value)} />
+                </label>
+              </fieldset>
+            )}
+
             <fieldset>
-              <legend>Contacto</legend>
-              <label> WhatsApp (solo dígitos, con código de país)
-                <input value={input(settings.whatsapp_number)} onChange={(e) => setField('whatsapp_number', e.target.value)} />
-              </label>
-              <label> Mensaje precargado de WhatsApp
-                <input value={input(settings.whatsapp_message)} onChange={(e) => setField('whatsapp_message', e.target.value)} />
-              </label>
-              <label> Teléfono mostrado en pantalla
-                <input value={input(settings.phone_display)} onChange={(e) => setField('phone_display', e.target.value)} />
-              </label>
-              <label> URL de Instagram
-                <input value={input(settings.instagram_url)} onChange={(e) => setField('instagram_url', e.target.value)} />
+              <legend>Mensaje precargado de WhatsApp</legend>
+              <label> Mensaje
+                <input
+                  value={getTrValue('whatsapp_message')}
+                  placeholder={settings.whatsapp_message}
+                  onChange={(e) => setTrValue('whatsapp_message', e.target.value)}
+                />
               </label>
             </fieldset>
 
             <fieldset>
               <legend>Hero</legend>
               <label> Eyebrow
-                <input value={input(settings.hero_eyebrow)} onChange={(e) => setField('hero_eyebrow', e.target.value)} />
+                <input
+                  value={getTrValue('hero_eyebrow')}
+                  placeholder={settings.hero_eyebrow}
+                  onChange={(e) => setTrValue('hero_eyebrow', e.target.value)}
+                />
               </label>
               <label> Título principal
-                <input value={input(settings.hero_title)} onChange={(e) => setField('hero_title', e.target.value)} />
+                <input
+                  value={getTrValue('hero_title')}
+                  placeholder={settings.hero_title}
+                  onChange={(e) => setTrValue('hero_title', e.target.value)}
+                />
               </label>
               <label> Texto de introducción
-                <textarea rows={3} value={input(settings.hero_lead)} onChange={(e) => setField('hero_lead', e.target.value)} />
+                <textarea
+                  rows={3}
+                  value={getTrValue('hero_lead')}
+                  placeholder={settings.hero_lead}
+                  onChange={(e) => setTrValue('hero_lead', e.target.value)}
+                />
               </label>
               <label> Nota bajo los botones
-                <input value={input(settings.hero_note)} onChange={(e) => setField('hero_note', e.target.value)} />
+                <input
+                  value={getTrValue('hero_note')}
+                  placeholder={settings.hero_note}
+                  onChange={(e) => setTrValue('hero_note', e.target.value)}
+                />
               </label>
               {settings.hero_image_url && (
                 <img className="admin-preview" src={photoUrl(settings.hero_image_url, 400)} alt="Foto del hero" />
@@ -785,10 +1017,19 @@ export default function AdminApp() {
             <fieldset>
               <legend>Nosotros</legend>
               <label> Cita
-                <input value={input(settings.about_quote)} onChange={(e) => setField('about_quote', e.target.value)} />
+                <input
+                  value={getTrValue('about_quote')}
+                  placeholder={settings.about_quote}
+                  onChange={(e) => setTrValue('about_quote', e.target.value)}
+                />
               </label>
               <label> Texto
-                <textarea rows={3} value={input(settings.about_text)} onChange={(e) => setField('about_text', e.target.value)} />
+                <textarea
+                  rows={3}
+                  value={getTrValue('about_text')}
+                  placeholder={settings.about_text}
+                  onChange={(e) => setTrValue('about_text', e.target.value)}
+                />
               </label>
               {settings.about_image_url && (
                 <img className="admin-preview" src={photoUrl(settings.about_image_url, 400)} alt="Foto de nosotros" />
@@ -797,74 +1038,104 @@ export default function AdminApp() {
 
             <fieldset>
               <legend>Puntos de confianza</legend>
-              {settings.trust_items.map((item, index) => (
-                <div className="admin-item" key={index}>
-                  <select
-                    value={item.icon}
-                    onChange={(e) =>
-                      setField('trust_items', settings.trust_items.map((it, i) => i === index ? { ...it, icon: e.target.value } : it))
-                    }
-                  >
-                    {ICONS.map((icon) => <option key={icon} value={icon}>{icon}</option>)}
-                  </select>
-                  <input
-                    placeholder="Título"
-                    value={item.title}
-                    onChange={(e) =>
-                      setField('trust_items', settings.trust_items.map((it, i) => i === index ? { ...it, title: e.target.value } : it))
-                    }
-                  />
-                  <input
-                    placeholder="Texto"
-                    value={item.text}
-                    onChange={(e) =>
-                      setField('trust_items', settings.trust_items.map((it, i) => i === index ? { ...it, text: e.target.value } : it))
-                    }
-                  />
-                  <button type="button" className="admin-remove" onClick={() =>
-                    setField('trust_items', settings.trust_items.filter((_, i) => i !== index))
-                  }>
-                    Quitar
-                  </button>
-                </div>
-              ))}
-              <button
-                type="button"
-                className="btn btn-ghost-small"
-                onClick={() => setField('trust_items', [...settings.trust_items, { icon: 'check', title: '', text: '' }])}
-              >
-                + Añadir punto de confianza
-              </button>
+              {getTrustItemsDraft().map((item, index) => {
+                const esItem = settings.trust_items[index];
+                return (
+                  <div className="admin-item" key={index}>
+                    {contentLang === 'es' && (
+                      <select
+                        value={item.icon}
+                        onChange={(e) =>
+                          setTrustItemsDraft(getTrustItemsDraft().map((it, i) => i === index ? { ...it, icon: e.target.value } : it))
+                        }
+                      >
+                        {ICONS.map((icon) => <option key={icon} value={icon}>{icon}</option>)}
+                      </select>
+                    )}
+                    <input
+                      placeholder={esItem ? `Título: ${esItem.title}` : 'Título'}
+                      value={item.title}
+                      onChange={(e) =>
+                        setTrustItemsDraft(getTrustItemsDraft().map((it, i) => i === index ? { ...it, title: e.target.value } : it))
+                      }
+                    />
+                    <input
+                      placeholder={esItem ? `Texto: ${esItem.text}` : 'Texto'}
+                      value={item.text}
+                      onChange={(e) =>
+                        setTrustItemsDraft(getTrustItemsDraft().map((it, i) => i === index ? { ...it, text: e.target.value } : it))
+                      }
+                    />
+                    {contentLang === 'es' && (
+                      <button type="button" className="admin-remove" onClick={() =>
+                        setTrustItemsDraft(getTrustItemsDraft().filter((_, i) => i !== index))
+                      }>
+                        Quitar
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+              {contentLang === 'es' && (
+                <button
+                  type="button"
+                  className="btn btn-ghost-small"
+                  onClick={() => setTrustItemsDraft([...getTrustItemsDraft(), { icon: 'check', title: '', text: '' }])}
+                >
+                  + Añadir punto de confianza
+                </button>
+              )}
             </fieldset>
 
             <fieldset>
               <legend>Rutas y servicios</legend>
               <p className="admin-hint" style={{ margin: 0 }}>
-                Las rutas se gestionan ahora en la pestaña <strong>Rutas</strong>, donde puedes
-                crearlas con fotos, precios y orden. Lo que editabas aquí ya no se muestra en la web.
+                Las rutas se gestionan en la pestaña <strong>Rutas</strong>; cada una tiene su propio
+                panel de traducciones. Lo que editabas aquí ya no se muestra en la web.
               </p>
             </fieldset>
 
             <fieldset>
               <legend>CTA final</legend>
               <label> Eyebrow
-                <input value={input(settings.cta_eyebrow)} onChange={(e) => setField('cta_eyebrow', e.target.value)} />
+                <input
+                  value={getTrValue('cta_eyebrow')}
+                  placeholder={settings.cta_eyebrow}
+                  onChange={(e) => setTrValue('cta_eyebrow', e.target.value)}
+                />
               </label>
               <label> Título
-                <input value={input(settings.cta_title)} onChange={(e) => setField('cta_title', e.target.value)} />
+                <input
+                  value={getTrValue('cta_title')}
+                  placeholder={settings.cta_title}
+                  onChange={(e) => setTrValue('cta_title', e.target.value)}
+                />
               </label>
               <label> Texto de introducción
-                <textarea rows={2} value={input(settings.cta_lead)} onChange={(e) => setField('cta_lead', e.target.value)} />
+                <textarea
+                  rows={2}
+                  value={getTrValue('cta_lead')}
+                  placeholder={settings.cta_lead}
+                  onChange={(e) => setTrValue('cta_lead', e.target.value)}
+                />
               </label>
             </fieldset>
 
             <fieldset>
               <legend>Footer</legend>
               <label> Frase
-                <input value={input(settings.footer_tagline)} onChange={(e) => setField('footer_tagline', e.target.value)} />
+                <input
+                  value={getTrValue('footer_tagline')}
+                  placeholder={settings.footer_tagline}
+                  onChange={(e) => setTrValue('footer_tagline', e.target.value)}
+                />
               </label>
               <label> Copyright (sin año)
-                <input value={input(settings.footer_copyright)} onChange={(e) => setField('footer_copyright', e.target.value)} />
+                <input
+                  value={getTrValue('footer_copyright')}
+                  placeholder={settings.footer_copyright}
+                  onChange={(e) => setTrValue('footer_copyright', e.target.value)}
+                />
               </label>
             </fieldset>
 
@@ -1033,6 +1304,14 @@ export default function AdminApp() {
                       <button className="btn btn-ghost-small" onClick={() => startEditRoute(route)}>
                         Editar
                       </button>
+                      <button
+                        className="btn btn-ghost-small"
+                        onClick={() =>
+                          setExpandedTrId(expandedTrId === `route-${route.id}` ? null : `route-${route.id}`)
+                        }
+                      >
+                        {expandedTrId === `route-${route.id}` ? 'Cerrar traducciones' : 'Traducciones'}
+                      </button>
                       <button className="btn btn-ghost-small" onClick={() => toggleRouteActive(route)}>
                         {route.is_active ? 'Desactivar' : 'Activar'}
                       </button>
@@ -1040,6 +1319,26 @@ export default function AdminApp() {
                         Eliminar
                       </button>
                     </div>
+
+                    {expandedTrId === `route-${route.id}` && (
+                      <RowTranslations
+                        key={`route-${route.id}`}
+                        table="routes"
+                        rowId={route.id}
+                        fields={[
+                          { key: 'title' },
+                          { key: 'description', textarea: true },
+                        ]}
+                        esValues={{ title: route.title, description: route.description }}
+                        translations={route.translations}
+                        onSaved={() => {
+                          flash('Traducciones de la ruta guardadas ✓');
+                          loadRoutes();
+                          setDeployStatus('publishing');
+                          trackDeploy(Date.now());
+                        }}
+                      />
+                    )}
                   </li>
                 ))}
               </ul>
@@ -1197,6 +1496,14 @@ export default function AdminApp() {
                       <button className="btn btn-ghost-small" onClick={() => startEditCar(car)}>
                         Editar
                       </button>
+                      <button
+                        className="btn btn-ghost-small"
+                        onClick={() =>
+                          setExpandedTrId(expandedTrId === `car-${car.id}` ? null : `car-${car.id}`)
+                        }
+                      >
+                        {expandedTrId === `car-${car.id}` ? 'Cerrar traducciones' : 'Traducciones'}
+                      </button>
                       <button className="btn btn-ghost-small" onClick={() => toggleCarActive(car)}>
                         {car.is_active ? 'Desactivar' : 'Activar'}
                       </button>
@@ -1204,6 +1511,31 @@ export default function AdminApp() {
                         Eliminar
                       </button>
                     </div>
+
+                    {expandedTrId === `car-${car.id}` && (
+                      <RowTranslations
+                        key={`car-${car.id}`}
+                        table="cars"
+                        rowId={car.id}
+                        fields={[
+                          { key: 'name' },
+                          { key: 'description', textarea: true },
+                          { key: 'details' },
+                        ]}
+                        esValues={{
+                          name: car.name,
+                          description: car.description,
+                          details: car.details ?? '',
+                        }}
+                        translations={car.translations}
+                        onSaved={() => {
+                          flash('Traducciones del carro guardadas ✓');
+                          loadCars();
+                          setDeployStatus('publishing');
+                          trackDeploy(Date.now());
+                        }}
+                      />
+                    )}
                   </li>
                 ))}
               </ul>

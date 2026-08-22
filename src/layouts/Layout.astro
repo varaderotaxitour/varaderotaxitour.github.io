@@ -1,27 +1,58 @@
 ---
 import '../styles/global.css';
+import { locales, localeHref, defaultLocale, type Locale } from '../i18n/ui';
 
 interface Props {
   title: string;
   description: string;
+  lang?: Locale | string;
 }
 
 const { title, description } = Astro.props;
+const lang = (Astro.props.lang as Locale) ?? defaultLocale;
+
+const ogLocales: Record<Locale, string> = {
+  es: 'es_ES',
+  en: 'en_US',
+  fr: 'fr_FR',
+  de: 'de_DE',
+  it: 'it_IT',
+  ru: 'ru_RU',
+};
+
+const pathname = Astro.url.pathname;
+const alternates = locales.map((loc) => ({
+  loc,
+  href: localeHref(pathname, loc),
+}));
+
+const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL as string | undefined;
+const storageOrigin = supabaseUrl ? new URL(supabaseUrl).origin : null;
 ---
 
 <!doctype html>
-<html lang="es">
+<html lang={lang}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="icon" type="image/png" href="/logo.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    {storageOrigin && <link rel="preconnect" href={storageOrigin} />}
     <title>{title}</title>
     <meta name="description" content={description} />
+
+    {alternates.map((alt) => (
+      <link rel="alternate" hreflang={alt.loc} href={alt.href} />
+    ))}
+    <link rel="alternate" hreflang="x-default" href={localeHref(pathname, defaultLocale)} />
 
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:image" content="/logo.png" />
     <meta property="og:type" content="website" />
+    <meta property="og:locale" content={ogLocales[lang]} />
+    {alternates.filter((a) => a.loc !== lang).map((alt) => (
+      <meta property="og:locale:alternate" content={ogLocales[alt.loc]} />
+    ))}
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
