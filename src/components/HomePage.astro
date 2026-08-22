@@ -7,6 +7,8 @@ import Comments from './Comments';
 import RouteLightbox from './RouteLightbox';
 import { loadSiteData } from '../lib/content';
 import { getUi, format, type Locale } from '../i18n/ui';
+import { Image } from 'astro:assets';
+import logo from '../assets/logo.webp';
 
 interface Props {
   locale: Locale;
@@ -32,7 +34,7 @@ const trust = content.trustItems;
   <header class="site-header">
     <div class="container header-inner">
       <a href="#top" class="brand">
-        <img src="/logo.webp" alt="Varadero Taxi Tour" />
+        <Image src={logo} alt="Varadero Taxi Tour" width={100} height={100} loading="eager" />
       </a>
       <nav class="main-nav" aria-label={t.ariaMainNav}>
         <a href="#rutas">{t.navRoutes}</a>
@@ -94,7 +96,7 @@ const trust = content.trustItems;
                 quality={78}
               />
             ) : (
-              <img src="/logo.webp" alt="" />
+              <Image src={logo} alt="" width={300} height={300} />
             )}
           </div>
         </div>
@@ -221,34 +223,55 @@ const trust = content.trustItems;
           <div class="cars-grid">
             {cars.map((car) => (
               <article class="car-card reveal">
-                <div class="car-photos">
-                  {car.photos && car.photos.length > 0 ? (
-                    <>
-                      <OptimImg
-                        class="car-photo-main"
-                        path={car.photos[0]}
-                        alt={car.name}
-                        widths={[400, 800]}
-                        sizes="(max-width: 560px) 100vw, 340px"
-                      />
-                      {car.photos.length > 1 && (
-                        <div class="car-thumbs">
-                          {car.photos.slice(1, 5).map((photo) => (
-                            <OptimImg path={photo} alt="" widths={[200]} />
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div class="car-photo-placeholder">
-                      <Icon name="car" size={48} />
-                    </div>
-                  )}
-                </div>
+                {car.photos && car.photos.length > 0 ? (
+                  <button
+                    class="car-photo-main"
+                    type="button"
+                    data-car-index={cars.indexOf(car)}
+                    data-car-photo-index={0}
+                    aria-label={
+                      car.photos.length === 1
+                        ? format(t.ariaViewPhotosOne, { title: car.name })
+                        : format(t.ariaViewPhotosMany, { count: car.photos.length, title: car.name })
+                    }
+                  >
+                    <OptimImg
+                      path={car.photos[0]}
+                      alt={car.name}
+                      widths={[400, 800]}
+                      sizes="(max-width: 860px) 100vw, 50vw"
+                    />
+                    <span class="photo-count">{car.photos.length}</span>
+                  </button>
+                ) : (
+                  <div class="car-photo-placeholder" aria-hidden="true">
+                    <Icon name="car" size={48} />
+                  </div>
+                )}
                 <div class="car-body">
-                  <h3>{car.name}</h3>
+                  <div class="car-card-head">
+                    <h3>{car.name}</h3>
+                  </div>
                   {car.details && <p class="car-details">{car.details}</p>}
                   <p class="car-desc">{car.description}</p>
+                  {car.photos.length > 1 && (
+                    <div class="car-thumbs">
+                      {car.photos.slice(1, 5).map((photo, thumbIdx) => (
+                        <button
+                          class="car-thumb"
+                          type="button"
+                          data-car-index={cars.indexOf(car)}
+                          data-car-photo-index={thumbIdx + 1}
+                          aria-label={format(t.ariaOpenPhoto, { index: thumbIdx + 2, title: car.name })}
+                        >
+                          <OptimImg path={photo} alt="" widths={[200]} quality={70} />
+                        </button>
+                      ))}
+                      {car.photos.length > 5 && (
+                        <span class="car-thumbs-more">+{car.photos.length - 5}</span>
+                      )}
+                    </div>
+                  )}
                   <a
                     class="btn btn-primary car-cta"
                     href={`https://wa.me/${content.whatsappNumber}?text=${encodeURIComponent(format(t.carWaMessage, { name: car.name }))}`}
@@ -261,6 +284,11 @@ const trust = content.trustItems;
               </article>
             ))}
           </div>
+          <script
+            type="application/json"
+            id="cars-lightbox-data"
+            set:html={JSON.stringify(cars.map((car) => ({ title: car.name, photos: car.photos })))}
+          />
         </div>
       </section>
     )}
@@ -306,7 +334,7 @@ const trust = content.trustItems;
   <footer class="site-footer">
     <div class="container footer-inner">
       <div class="footer-brand">
-        <img src="/logo.webp" alt="Varadero Taxi Tour" />
+        <Image src={logo} alt="Varadero Taxi Tour" width={80} height={80} />
         <p>{content.footerTagline}</p>
       </div>
       <p class="footer-note">© {new Date().getFullYear()} {content.footerCopyright}</p>
@@ -367,6 +395,32 @@ const trust = content.trustItems;
               photos: route.photos,
               title: route.title,
               index: Number(btn.dataset.photoIndex) || 0,
+            },
+          })
+        );
+      });
+    });
+  }
+
+  // ---- Lightbox de carros (mismo visor, mismas fotos WebP) ----
+  const carsDataEl = document.getElementById('cars-lightbox-data');
+  if (carsDataEl) {
+    let carsLightbox: { title: string; photos: string[] }[] = [];
+    try {
+      carsLightbox = JSON.parse(carsDataEl.textContent || '[]');
+    } catch {
+      carsLightbox = [];
+    }
+    document.querySelectorAll<HTMLElement>('[data-car-index]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const car = carsLightbox[Number(btn.dataset.carIndex)];
+        if (!car || !car.photos?.length) return;
+        window.dispatchEvent(
+          new CustomEvent('route-lightbox:open', {
+            detail: {
+              photos: car.photos,
+              title: car.title,
+              index: Number(btn.dataset.carPhotoIndex) || 0,
             },
           })
         );
@@ -594,31 +648,49 @@ const trust = content.trustItems;
     border: none;
     background: var(--sand-lt);
     cursor: zoom-in;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    isolation: isolate;
   }
   .route-photo-main img {
     width: 100%;
-    height: 150px;
+    height: 100%;
     object-fit: cover;
+    object-position: center;
     display: block;
-    transition: transform 0.25s ease;
+    transition: transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1), filter 0.3s ease;
+    background: var(--sand-lt);
   }
-  .route-photo-main:hover img { transform: scale(1.04); }
+  .route-photo-main:hover img { transform: scale(1.06); }
+  .route-photo-main::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(0,0,0,0) 55%, rgba(6, 40, 45, 0.28) 100%);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  .route-photo-main:hover::after { opacity: 1; }
   .photo-count {
     position: absolute;
     right: 10px;
     bottom: 10px;
-    padding: 3px 10px;
+    z-index: 1;
+    padding: 4px 10px;
     border-radius: 999px;
-    background: rgba(6, 40, 45, 0.72);
+    background: rgba(6, 40, 45, 0.78);
+    backdrop-filter: blur(6px);
     color: var(--white);
     font-size: 0.75rem;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.18);
   }
   .photo-count::before { content: '📷 '; font-size: 0.7rem; }
 
   .route-photo-placeholder {
-    height: 110px;
+    aspect-ratio: 16 / 9;
     display: grid;
     place-items: center;
     color: var(--teal);
@@ -677,13 +749,17 @@ const trust = content.trustItems;
     overflow: hidden;
     cursor: zoom-in;
     background: var(--sand-lt);
+    width: 56px;
+    aspect-ratio: 4 / 3;
   }
   .route-thumb img {
-    width: 56px;
-    height: 44px;
+    width: 100%;
+    height: 100%;
     object-fit: cover;
+    object-position: center;
     display: block;
     transition: transform 0.2s ease, opacity 0.2s ease;
+    background: var(--sand-lt);
   }
   .route-thumb:hover img { transform: scale(1.08); opacity: 0.85; }
 
@@ -703,12 +779,13 @@ const trust = content.trustItems;
     .routes-grid { grid-template-columns: 1fr; }
   }
 
-  /* ===================== CARROS ===================== */
+  /* ===================== CARROS (mismo look que RUTAS) ===================== */
   .cars { background: var(--cream); }
   .cars-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 28px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+    align-items: start;
   }
   .car-card {
     background: var(--white);
@@ -720,49 +797,81 @@ const trust = content.trustItems;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
   }
   .car-card:hover {
-    transform: translateY(-4px);
+    transform: translateY(-3px);
     box-shadow: var(--shadow-card);
   }
-  .car-photos {
+  .car-photo-main {
     position: relative;
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: none;
+    background: var(--sand-lt);
+    cursor: zoom-in;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    isolation: isolate;
+  }
+  .car-photo-main img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    display: block;
+    transition: transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1), filter 0.3s ease;
     background: var(--sand-lt);
   }
-  .car-photo-main {
-    width: 100%;
-    height: 220px;
-    object-fit: cover;
-    display: block;
+  .car-photo-main:hover img { transform: scale(1.06); }
+  .car-photo-main::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(0,0,0,0) 55%, rgba(6, 40, 45, 0.28) 100%);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
   }
-  .car-thumbs {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 4px;
-    padding: 4px;
-    background: var(--white);
-  }
-  .car-thumbs img {
-    width: 100%;
-    height: 64px;
-    object-fit: cover;
-    border-radius: 6px;
+  .car-photo-main:hover::after { opacity: 1; }
+  .car-photo-main .photo-count {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    z-index: 1;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(6, 40, 45, 0.78);
+    backdrop-filter: blur(6px);
+    color: var(--white);
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.18);
   }
   .car-photo-placeholder {
-    height: 220px;
+    aspect-ratio: 16 / 9;
     display: grid;
     place-items: center;
     color: var(--teal);
-    background: var(--sand-lt);
+    background: linear-gradient(160deg, var(--sand-lt), var(--turquoise-lt));
   }
   .car-body {
-    padding: 22px 22px 24px;
+    padding: 14px 16px 16px;
     display: grid;
-    gap: 10px;
+    gap: 8px;
     flex: 1;
+    align-content: start;
   }
-  .car-body h3 {
-    font-size: 1.22rem;
+  .car-card-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 12px;
+  }
+  .car-card-head h3 {
+    font-size: 1rem;
     color: var(--teal-deep);
-    line-height: 1.15;
+    line-height: 1.25;
   }
   .car-details {
     font-size: 0.84rem;
@@ -772,19 +881,53 @@ const trust = content.trustItems;
   }
   .car-desc {
     color: var(--ink-soft);
-    font-size: 0.96rem;
-    line-height: 1.55;
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+  .car-thumbs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 2px;
+    align-items: center;
+  }
+  .car-thumb {
+    padding: 0;
+    border: none;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: zoom-in;
+    background: var(--sand-lt);
+    width: 56px;
+    aspect-ratio: 4 / 3;
+  }
+  .car-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    display: block;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+    background: var(--sand-lt);
+  }
+  .car-thumb:hover img { transform: scale(1.08); opacity: 0.85; }
+  .car-thumbs-more {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+    background: var(--sand-lt);
+    padding: 6px 10px;
+    border-radius: 999px;
   }
   .car-cta {
-    margin-top: 8px;
+    margin-top: 4px;
     justify-content: center;
     width: fit-content;
     padding: 10px 20px;
     font-size: 0.92rem;
   }
-  @media (max-width: 560px) {
+  @media (max-width: 860px) {
     .cars-grid { grid-template-columns: 1fr; }
-    .car-photo-main { height: 200px; }
   }
 
   /* ===================== CTA FINAL ===================== */

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { createClient, type Session } from '@supabase/supabase-js';
 import { locales, localeNames, type Locale } from '../i18n/ui';
 import { toWebp, toWebpAll } from './webp';
+import { validateFiles, MAX_PHOTOS_PER_ENTITY } from '../lib/image';
 import './admin.css';
 
 const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL as string;
@@ -439,13 +440,18 @@ export default function AdminApp() {
 
   async function uploadPhotos(folder: string, entries: PendingPhoto[]): Promise<string[]> {
     if (!supabase) return [];
+    // validar antes de convertir
+    const err = validateFiles(entries.map((e) => e.file));
+    if (err) throw new Error(err);
     const paths: string[] = [];
     for (const entry of entries) {
-      const converted = await toWebp(entry.file);
+      const converted = await toWebp(entry.file, 1400, 0.75);
       const safeName = converted.name.replace(/[^a-zA-Z0-9._-]/g, '_');
       const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${safeName}`;
       const { error } = await supabase.storage.from('fotos').upload(path, converted, {
         upsert: false,
+        contentType: 'image/webp',
+        cacheControl: '3600',
       });
       if (error) throw new Error(error.message);
       paths.push(path);
@@ -458,9 +464,18 @@ export default function AdminApp() {
     const files = Array.from(event.target.files ?? []);
     event.target.value = '';
     if (files.length === 0) return;
+    const vErr = validateFiles(files);
+    if (vErr) {
+      flash(vErr);
+      return;
+    }
+    if (files.length > 20) {
+      flash('Máximo 20 fotos a la vez en galería.');
+      return;
+    }
     setUploadBusy(true);
     try {
-      const converted = await toWebpAll(files);
+      const converted = await toWebpAll(files, 1400, 0.75);
       let ok = 0;
       for (const file of converted) {
         const path = `galeria/${Date.now()}-${Math.random()
@@ -468,6 +483,8 @@ export default function AdminApp() {
           .slice(2, 7)}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
         const { error } = await supabase.storage.from('fotos').upload(path, file, {
           upsert: false,
+          contentType: 'image/webp',
+          cacheControl: '3600',
         });
         if (error) flash(`Error al subir ${file.name}: ${error.message}`);
         else ok += 1;
@@ -476,6 +493,8 @@ export default function AdminApp() {
         loadUploads();
         flash(`${ok} foto${ok > 1 ? 's' : ''} subida${ok > 1 ? 's' : ''} ✓ Ahora asígnala con los botones de abajo.`);
       }
+    } catch (err) {
+      flash('Error al convertir: ' + (err as Error).message);
     } finally {
       setUploadBusy(false);
     }
@@ -493,10 +512,12 @@ export default function AdminApp() {
 
   async function deleteUpload(upload: UploadRow) {
     if (!supabase) return;
-    if (!window.confirm('¿Eliminar esta foto del almacenamiento?')) return;
+    if (!window.confirm('¿Eliminar esta foto del almacenamiento? Se borrará definitivamente.')) return;
     const { error } = await supabase.storage.from('fotos').remove([`galeria/${upload.name}`]);
-    if (!error) loadUploads();
-    else flash('Error al eliminar: ' + error.message);
+    if (!error) {
+      flash('Foto borrada ✓');
+      loadUploads();
+    } else flash('Error al eliminar: ' + error.message);
   }
 
   // ---- Carros: CRUD ----
@@ -566,6 +587,9 @@ export default function AdminApp() {
       }
       if (pendingCarFiles.length > 0) {
         const existing = editingCarId ? cars.find((c) => c.id === carId)?.photos ?? [] : [];
+        if (existing.length + pendingCarFiles.length > MAX_PHOTOS_PER_ENTITY) {
+          throw new Error(`Máximo ${MAX_PHOTOS_PER_ENTITY} fotos por carro.`);
+        }
         const paths = await uploadPhotos(`cars/${carId}`, pendingCarFiles);
         const { error: photoErr } = await supabase
           .from('cars')
@@ -601,19 +625,22 @@ export default function AdminApp() {
 
   async function deleteCar(car: CarRow) {
     if (!supabase) return;
-    if (!window.confirm(`¿Eliminar el carro "${car.name}"? Esta acción no se puede deshacer.`)) return;
-    // Borrar fotos asociadas en storage (best-effort)
-    if (car.photos && car.photos.length > 0) {
-      await supabase.storage.from('fotos').remove(car.photos);
-    }
+    if (!window.confirm(`¿Eliminar el carro "${car.name}"? Se borrarán ${car.photos?.length ?? 0} fotos del almacenamiento. Esta acción no se puede deshacer.`)) return;
     const { error } = await supabase.from('cars').delete().eq('id', car.id);
-    if (error) flash('Error al eliminar: ' + error.message);
-    else {
-      flash('Carro eliminado ✓');
-      loadCars();
-      setDeployStatus('publishing');
-      trackDeploy(Date.now());
+    if (error) {
+      flash('Error al eliminar: ' + error.message);
+      return;
     }
+    if (car.photos && car.photos.length > 0) {
+      const { error: stErr } = await supabase.storage.from('fotos').remove(car.photos);
+      if (stErr) flash(`Carro eliminado pero ${stErr.message} al borrar fotos.`);
+      else flash('Carro y sus fotos borrados ✓');
+    } else {
+      flash('Carro eliminado ✓');
+    }
+    loadCars();
+    setDeployStatus('publishing');
+    trackDeploy(Date.now());
   }
 
   async function handleCarPhotoUpload(car: CarRow, event: React.ChangeEvent<HTMLInputElement>) {
@@ -621,6 +648,12 @@ export default function AdminApp() {
     const files = Array.from(event.target.files ?? []);
     event.target.value = '';
     if (files.length === 0) return;
+    if ((car.photos?.length ?? 0) + files.length > MAX_PHOTOS_PER_ENTITY) {
+      flash(`Máximo ${MAX_PHOTOS_PER_ENTITY} fotos por carro. Ya tienes ${car.photos?.length ?? 0}.`);
+      return;
+    }
+    const vErr = validateFiles(files);
+    if (vErr) { flash(vErr); return; }
     setCarPhotoBusyId(car.id);
     try {
       const pending = makePending(files);
@@ -642,7 +675,7 @@ export default function AdminApp() {
 
   async function removeCarPhoto(car: CarRow, photoPath: string) {
     if (!supabase) return;
-    if (!window.confirm('¿Quitar esta foto del carro?')) return;
+    if (!window.confirm('¿Quitar esta foto del carro? Se borrará del almacenamiento.')) return;
     const newPhotos = (car.photos || []).filter((p) => p !== photoPath);
     const { error: dbErr } = await supabase.from('cars').update({ photos: newPhotos }).eq('id', car.id);
     if (dbErr) {
@@ -650,8 +683,12 @@ export default function AdminApp() {
       return;
     }
     const { error: stErr } = await supabase.storage.from('fotos').remove([photoPath]);
-    if (stErr) console.warn('storage remove', stErr.message);
-    flash('Foto quitada ✓');
+    if (stErr) {
+      console.warn('storage remove', stErr.message);
+      flash('Foto quitada de la ficha pero no se pudo borrar del almacenamiento: ' + stErr.message);
+    } else {
+      flash('Foto borrada definitivamente ✓');
+    }
     loadCars();
   }
 
@@ -699,6 +736,17 @@ export default function AdminApp() {
     const files = Array.from(event.target.files ?? []);
     event.target.value = '';
     if (files.length === 0) return;
+    const existing = editingRouteId ? routes.find((r) => r.id === editingRouteId)?.photos.length ?? 0 : 0;
+    const totalPending = pendingRouteFiles.length + files.length + existing;
+    if (totalPending > MAX_PHOTOS_PER_ENTITY) {
+      flash(`Máximo ${MAX_PHOTOS_PER_ENTITY} fotos por ruta. Ya tienes ${existing} + ${pendingRouteFiles.length} pendientes.`);
+      return;
+    }
+    const err = validateFiles(files);
+    if (err) {
+      flash(err);
+      return;
+    }
     setPendingRouteFiles((prev) => [...prev, ...makePending(files)]);
   }
 
@@ -744,6 +792,9 @@ export default function AdminApp() {
       }
       if (pendingRouteFiles.length > 0) {
         const existing = editingRouteId ? routes.find((r) => r.id === routeId)?.photos ?? [] : [];
+        if (existing.length + pendingRouteFiles.length > MAX_PHOTOS_PER_ENTITY) {
+          throw new Error(`Máximo ${MAX_PHOTOS_PER_ENTITY} fotos por ruta.`);
+        }
         const paths = await uploadPhotos(`rutas/${routeId}`, pendingRouteFiles);
         const { error: photoErr } = await supabase
           .from('routes')
@@ -779,18 +830,22 @@ export default function AdminApp() {
 
   async function deleteRoute(route: RouteRow) {
     if (!supabase) return;
-    if (!window.confirm(`¿Eliminar la ruta "${route.title}"? Esta acción no se puede deshacer.`)) return;
-    if (route.photos && route.photos.length > 0) {
-      await supabase.storage.from('fotos').remove(route.photos);
-    }
+    if (!window.confirm(`¿Eliminar la ruta "${route.title}"? Se borrarán ${route.photos?.length ?? 0} fotos.`)) return;
     const { error } = await supabase.from('routes').delete().eq('id', route.id);
-    if (error) flash('Error al eliminar: ' + error.message);
-    else {
-      flash('Ruta eliminada ✓');
-      loadRoutes();
-      setDeployStatus('publishing');
-      trackDeploy(Date.now());
+    if (error) {
+      flash('Error al eliminar: ' + error.message);
+      return;
     }
+    if (route.photos && route.photos.length > 0) {
+      const { error: stErr } = await supabase.storage.from('fotos').remove(route.photos);
+      if (stErr) flash(`Ruta eliminada pero error al borrar fotos: ${stErr.message}`);
+      else flash('Ruta y sus fotos borradas ✓');
+    } else {
+      flash('Ruta eliminada ✓');
+    }
+    loadRoutes();
+    setDeployStatus('publishing');
+    trackDeploy(Date.now());
   }
 
   async function handleRoutePhotoUpload(route: RouteRow, event: React.ChangeEvent<HTMLInputElement>) {
@@ -798,6 +853,12 @@ export default function AdminApp() {
     const files = Array.from(event.target.files ?? []);
     event.target.value = '';
     if (files.length === 0) return;
+    if ((route.photos?.length ?? 0) + files.length > MAX_PHOTOS_PER_ENTITY) {
+      flash(`Máximo ${MAX_PHOTOS_PER_ENTITY} fotos por ruta.`);
+      return;
+    }
+    const vErr = validateFiles(files);
+    if (vErr) { flash(vErr); return; }
     setRoutePhotoBusyId(route.id);
     try {
       const pending = makePending(files);
@@ -819,7 +880,7 @@ export default function AdminApp() {
 
   async function removeRoutePhoto(route: RouteRow, photoPath: string) {
     if (!supabase) return;
-    if (!window.confirm('¿Quitar esta foto de la ruta?')) return;
+    if (!window.confirm('¿Quitar esta foto de la ruta? Se borrará del almacenamiento.')) return;
     const newPhotos = (route.photos || []).filter((p) => p !== photoPath);
     const { error: dbErr } = await supabase.from('routes').update({ photos: newPhotos }).eq('id', route.id);
     if (dbErr) {
@@ -827,8 +888,12 @@ export default function AdminApp() {
       return;
     }
     const { error: stErr } = await supabase.storage.from('fotos').remove([photoPath]);
-    if (stErr) console.warn('storage remove', stErr.message);
-    flash('Foto quitada ✓');
+    if (stErr) {
+      console.warn('storage remove', stErr.message);
+      flash('Foto quitada de la ficha pero no del almacenamiento: ' + stErr.message);
+    } else {
+      flash('Foto borrada definitivamente ✓');
+    }
     loadRoutes();
   }
 
@@ -1421,7 +1486,7 @@ export default function AdminApp() {
               </div>
               <div className="admin-pending">
                 <label className="btn btn-ghost-small file-label">
-                  + Añadir fotos
+                  + Añadir fotos (máx {MAX_PHOTOS_PER_ENTITY})
                   <input
                     type="file"
                     accept="image/*"
@@ -1430,7 +1495,15 @@ export default function AdminApp() {
                     onChange={(e) => {
                       const files = Array.from(e.target.files ?? []);
                       e.target.value = '';
-                      if (files.length > 0) setPendingCarFiles((prev) => [...prev, ...makePending(files)]);
+                      if (files.length === 0) return;
+                      const existing = editingCarId ? cars.find((c) => c.id === editingCarId)?.photos.length ?? 0 : 0;
+                      if (pendingCarFiles.length + files.length + existing > MAX_PHOTOS_PER_ENTITY) {
+                        flash(`Máximo ${MAX_PHOTOS_PER_ENTITY} fotos por carro.`);
+                        return;
+                      }
+                      const err = validateFiles(files);
+                      if (err) { flash(err); return; }
+                      setPendingCarFiles((prev) => [...prev, ...makePending(files)]);
                     }}
                   />
                 </label>

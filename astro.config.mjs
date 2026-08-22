@@ -10,4 +10,8 @@ export default defineConfig({
       prefixDefaultLocale: false,
     },
   },
+  image: {
+    service: { entrypoint: 'astro/assets/services/sharp' },
+    domains: ['bwhpeoppgexwaqphozdq.supabase.co'],
+  },
 });

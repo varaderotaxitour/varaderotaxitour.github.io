@@ -74,7 +74,7 @@ export default function RouteLightbox({ strings }: Props) {
 
   if (!state) return null;
 
-  const photoSrc = `${storageBase}${state.photos[state.index]}?width=1400&quality=82`;
+  const photoSrc = `${storageBase}${state.photos[state.index]}?width=1400&quality=82&format=webp`;
 
   return (
     <div

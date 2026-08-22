@@ -8,6 +8,7 @@ interface Props {
   loading?: 'lazy' | 'eager';
   fetchpriority?: 'high' | 'low' | 'auto';
   class?: string;
+  style?: string;
 }
 
 const {
@@ -19,22 +20,21 @@ const {
   loading = 'lazy',
   fetchpriority,
   class: className,
+  style: styleProp,
 } = Astro.props;
 
+import { supabaseImageUrl } from '../lib/image';
+
 const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL as string | undefined;
-const base = supabaseUrl
-  ? `${supabaseUrl}/storage/v1/render/image/public/fotos/`
-  : '/';
 
 const sorted = [...new Set(widths)].sort((a, b) => a - b);
 const largest = sorted[sorted.length - 1];
-const params = (w: number) => `width=${w}&quality=${quality}&format=webp`;
 
 const srcset =
   sorted.length > 1
-    ? sorted.map((w) => `${base}${path}?${params(w)} ${w}w`).join(', ')
+    ? sorted.map((w) => `${supabaseImageUrl(supabaseUrl, path, { width: w, quality, format: 'webp' })} ${w}w`).join(', ')
     : undefined;
-const src = `${base}${path}?${params(largest)}`;
+const src = supabaseImageUrl(supabaseUrl, path, { width: largest, quality, format: 'webp' });
 ---
 
 <img
@@ -42,8 +42,11 @@ const src = `${base}${path}?${params(largest)}`;
   srcset={srcset}
   sizes={sizes}
   alt={alt}
+  width={largest}
   loading={loading}
   decoding="async"
   fetchpriority={fetchpriority}
   class={className}
+  style={styleProp}
+  draggable="false"
 />

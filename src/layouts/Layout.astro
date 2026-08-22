@@ -47,7 +47,8 @@ const storageOrigin = supabaseUrl ? new URL(supabaseUrl).origin : null;
 
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
-    <meta property="og:image" content="/logo.png" />
+    <meta property="og:image" content="/logo.webp" />
+    <meta property="og:image:type" content="image/webp" />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content={ogLocales[lang]} />
     {alternates.filter((a) => a.loc !== lang).map((alt) => (
