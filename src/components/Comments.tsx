@@ -115,6 +115,16 @@ export default function Comments({ locale = 'es', strings }: Props) {
       setError(t.cUnavailable);
       return;
     }
+    // Honeypot anti-spam: campo oculto que los bots rellenan. Si viene
+    // relleno, fingimos éxito sin insertar nada.
+    const form = event.currentTarget;
+    const honeypot = (form.elements.namedItem('website') as HTMLInputElement | null)?.value ?? '';
+    if (honeypot.trim() !== '') {
+      setSent(true);
+      setName('');
+      setMessage('');
+      return;
+    }
     const cleanName = name.trim();
     const cleanMessage = message.trim();
     if (cleanName.length < 2 || cleanName.length > 60) {
@@ -219,6 +229,12 @@ export default function Comments({ locale = 'es', strings }: Props) {
               required
             />
           </label>
+          <div aria-hidden="true" style={{ position: 'absolute', left: '-9999px', height: 0, overflow: 'hidden' }}>
+            <label>
+              Website
+              <input type="text" name="website" tabIndex={-1} autoComplete="off" />
+            </label>
+          </div>
           {error && <p className="comment-error">{error}</p>}
           <button className="btn btn-primary" type="submit" disabled={submitting}>
             {submitting ? t.cSending : t.cSubmit}

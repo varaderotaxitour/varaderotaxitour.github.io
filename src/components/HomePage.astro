@@ -24,6 +24,10 @@ const whatsappHref = `https://wa.me/${content.whatsappNumber}?text=${encodeURICo
 const instagramHref = content.instagramUrl;
 const phoneDisplay = content.phoneDisplay;
 const trust = content.trustItems;
+
+// JSON seguro para <script type="application/json">: evita cierre prematuro con "</script>"
+const safeJson = (value: unknown) =>
+  JSON.stringify(value).replace(/</g, '\\u003c');
 ---
 
 <Layout
@@ -190,7 +194,7 @@ const trust = content.trustItems;
         <script
           type="application/json"
           id="routes-lightbox-data"
-          set:html={JSON.stringify(stops.map((stop) => ({ title: stop.title, photos: stop.photos })))}
+          set:html={safeJson(stops.map((stop) => ({ title: stop.title, photos: stop.photos })))}
         />
       </div>
     </section>
@@ -254,7 +258,7 @@ const trust = content.trustItems;
           <script
             type="application/json"
             id="cars-lightbox-data"
-            set:html={JSON.stringify(cars.map((car) => ({ title: car.name, photos: car.photos })))}
+            set:html={safeJson(cars.map((car) => ({ title: car.name, photos: car.photos })))}
           />
         </div>
       </section>
@@ -285,12 +289,12 @@ const trust = content.trustItems;
           <p class="eyebrow">{t.commentsEyebrow}</p>
           <h2>{t.commentsTitle}</h2>
         </div>
-        <Comments client:load locale={locale} strings={{ ...t }} />
+        <Comments client:visible locale={locale} strings={{ ...t }} />
       </div>
     </section>
   </main>
 
-  <RouteLightbox client:load strings={{
+  <RouteLightbox client:idle strings={{
     lbPhotosOfTitle: t.lbPhotosOfTitle,
     lbGallery: t.lbGallery,
     lbClose: t.lbClose,
