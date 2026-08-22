@@ -167,7 +167,7 @@ const trust = content.trustItems;
                     widths={[400, 800]}
                     sizes="(max-width: 860px) 100vw, 50vw"
                   />
-                  <span class="photo-count">{stop.photos.length}</span>
+                  {stop.photos.length > 1 && <span class="photo-count">{stop.photos.length}</span>}
                 </button>
               ) : (
                 <div class="route-photo-placeholder" aria-hidden="true">
@@ -183,21 +183,6 @@ const trust = content.trustItems;
                   <span class="price-pill">{stop.price} <small>USD/EUR</small></span>
                 </div>
                 <p>{stop.desc}</p>
-                {stop.photos.length > 1 && (
-                  <div class="route-thumbs">
-                    {stop.photos.slice(1).map((photo, thumbIdx) => (
-                      <button
-                        class="route-thumb"
-                        type="button"
-                        data-route-index={stops.indexOf(stop)}
-                        data-photo-index={thumbIdx + 1}
-                        aria-label={format(t.ariaOpenPhoto, { index: thumbIdx + 2, title: stop.title })}
-                      >
-                        <OptimImg path={photo} alt="" widths={[200]} quality={70} />
-                      </button>
-                    ))}
-                  </div>
-                )}
               </div>
             </article>
           ))}
@@ -241,7 +226,7 @@ const trust = content.trustItems;
                       widths={[400, 800]}
                       sizes="(max-width: 860px) 100vw, 50vw"
                     />
-                    <span class="photo-count">{car.photos.length}</span>
+                    {car.photos.length > 1 && <span class="photo-count">{car.photos.length}</span>}
                   </button>
                 ) : (
                   <div class="car-photo-placeholder" aria-hidden="true">
@@ -254,24 +239,6 @@ const trust = content.trustItems;
                   </div>
                   {car.details && <p class="car-details">{car.details}</p>}
                   <p class="car-desc">{car.description}</p>
-                  {car.photos.length > 1 && (
-                    <div class="car-thumbs">
-                      {car.photos.slice(1, 5).map((photo, thumbIdx) => (
-                        <button
-                          class="car-thumb"
-                          type="button"
-                          data-car-index={cars.indexOf(car)}
-                          data-car-photo-index={thumbIdx + 1}
-                          aria-label={format(t.ariaOpenPhoto, { index: thumbIdx + 2, title: car.name })}
-                        >
-                          <OptimImg path={photo} alt="" widths={[200]} quality={70} />
-                        </button>
-                      ))}
-                      {car.photos.length > 5 && (
-                        <span class="car-thumbs-more">+{car.photos.length - 5}</span>
-                      )}
-                    </div>
-                  )}
                   <a
                     class="btn btn-primary car-cta"
                     href={`https://wa.me/${content.whatsappNumber}?text=${encodeURIComponent(format(t.carWaMessage, { name: car.name }))}`}
@@ -470,6 +437,7 @@ const trust = content.trustItems;
   @media (max-width: 760px) {
     .main-nav { display: none; }
     .brand img { height: 44px; }
+    .header-tools :global(.lang-switch--bar) { display: none; }
   }
 
   /* ===================== HERO ===================== */
@@ -736,33 +704,6 @@ const trust = content.trustItems;
     line-height: 1.5;
   }
 
-  .route-thumbs {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-top: 2px;
-  }
-  .route-thumb {
-    padding: 0;
-    border: none;
-    border-radius: 8px;
-    overflow: hidden;
-    cursor: zoom-in;
-    background: var(--sand-lt);
-    width: 56px;
-    aspect-ratio: 4 / 3;
-  }
-  .route-thumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: center;
-    display: block;
-    transition: transform 0.2s ease, opacity 0.2s ease;
-    background: var(--sand-lt);
-  }
-  .route-thumb:hover img { transform: scale(1.08); opacity: 0.85; }
-
   .price-pill {
     font-family: var(--font-display);
     font-weight: 600;
@@ -883,41 +824,6 @@ const trust = content.trustItems;
     color: var(--ink-soft);
     font-size: 0.9rem;
     line-height: 1.5;
-  }
-  .car-thumbs {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-top: 2px;
-    align-items: center;
-  }
-  .car-thumb {
-    padding: 0;
-    border: none;
-    border-radius: 8px;
-    overflow: hidden;
-    cursor: zoom-in;
-    background: var(--sand-lt);
-    width: 56px;
-    aspect-ratio: 4 / 3;
-  }
-  .car-thumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: center;
-    display: block;
-    transition: transform 0.2s ease, opacity 0.2s ease;
-    background: var(--sand-lt);
-  }
-  .car-thumb:hover img { transform: scale(1.08); opacity: 0.85; }
-  .car-thumbs-more {
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: var(--ink-soft);
-    background: var(--sand-lt);
-    padding: 6px 10px;
-    border-radius: 999px;
   }
   .car-cta {
     margin-top: 4px;
@@ -1066,7 +972,9 @@ const trust = content.trustItems;
   .mobile-nav a:hover { background: var(--sand-lt); color: var(--teal-deep); }
 
   .mobile-nav :global(.lang-switch--stack) {
-    margin-top: 10px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(12, 102, 114, 0.12);
   }
 
   @media (max-width: 760px) {
